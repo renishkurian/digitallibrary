@@ -48,7 +48,15 @@ jobs:
           
           # Exhaustive permission fix for production
           sudo chown -R www-data:www-data /var/www/html/balarama
+          
+          # Ensure all storage directories exist
+          sudo mkdir -p /var/www/html/balarama/storage/framework/sessions
+          sudo mkdir -p /var/www/html/balarama/storage/framework/views
+          sudo mkdir -p /var/www/html/balarama/storage/framework/cache
+          sudo mkdir -p /var/www/html/balarama/storage/logs
+          
           sudo chmod -R 775 /var/www/html/balarama/storage /var/www/html/balarama/bootstrap/cache /var/www/html/balarama/database
+          sudo chown -R www-data:www-data /var/www/html/balarama/storage /var/www/html/balarama/bootstrap/cache /var/www/html/balarama/database
           
           # SQLite needs write permission on the directory to create journal files
           sudo chmod 777 /var/www/html/balarama/database
