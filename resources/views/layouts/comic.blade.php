@@ -170,7 +170,46 @@
             padding: 80px 40px 60px;
         }
 
-        /* Add other styles from index.php here... */
+        /* ── PAGINATION ── */
+        .pagination {
+            margin-top: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            font-family: var(--font-body);
+        }
+
+        .pagination svg {
+            width: 20px;
+            height: 20px;
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        .pagination nav>div:first-child {
+            display: none;
+            /* Hide the 'Showing X to Y' on mobile-ish views if it's messy */
+        }
+
+        /* Standard Laravel Pagination styling for a premium look */
+        .pagination a,
+        .pagination span {
+            color: var(--muted);
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .pagination a:hover {
+            color: var(--accent);
+        }
+
+        .pagination .active,
+        .pagination span[aria-current="page"] {
+            color: var(--text);
+            font-weight: 500;
+        }
+
         @yield('styles')
     </style>
 </head>

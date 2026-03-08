@@ -1,3 +1,75 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --card: #16161f;
+    --accent: #e8003d;
+    --accent2: #ff6b35;
+    --text: #f0f0f5;
+    --muted: #8888a0;
+    --border: rgba(255, 255, 255, 0.07);
+    --glow: rgba(232, 0, 61, 0.35);
+    --font-display: 'Bebas Neue', sans-serif;
+    --font-body: 'DM Sans', sans-serif;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-weight: 300;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar {
+    width: 4px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--accent);
+    border-radius: 2px;
+}
+
+/* ── PAGINATION ── */
+.pagination {
+    margin-top: 40px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    font-family: var(--font-body);
+}
+
+.pagination svg {
+    width: 20px;
+    height: 20px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* Pagination links styling for a premium look */
+.pagination a, 
+.pagination span {
+    color: var(--muted);
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.pagination a:hover {
+    color: var(--accent);
+}
+
+.pagination .active,
+.pagination span[aria-current="page"] {
+    color: var(--text);
+    font-weight: 500;
+}

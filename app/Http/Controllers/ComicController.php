@@ -5,9 +5,12 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 
 use App\Models\Comic;
+use App\Models\Shelf;
+use App\Models\Category;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Inertia;
 
 class ComicController extends Controller
 {
@@ -39,9 +42,36 @@ class ComicController extends Controller
             }
         }
 
-        $comics = $query->latest()->paginate(28)->withQueryString();
+        // Shelf Filter
+        if ($request->filled('shelf')) {
+            $query->where('shelf_id', $request->shelf);
+        }
 
-        return view('comics.index', compact('comics'));
+        // Category Filter
+        if ($request->filled('category')) {
+            $query->whereHas('categories', function ($q) use ($request) {
+                $q->where('categories.id', $request->category)
+                    ->orWhere('categories.slug', $request->category);
+            });
+        }
+
+        $comics = $query->latest()
+            ->paginate(28)
+            ->withQueryString()
+            ->through(fn($comic) => [
+                'id' => $comic->id,
+                'title' => $comic->title,
+                'thumbnail' => $comic->thumbnail,
+                'is_read' => Auth::check() ? $comic->isReadBy(Auth::user()) : false,
+                'is_hidden' => (bool) $comic->is_hidden,
+            ]);
+
+        return Inertia::render('Comics/Index', [
+            'comics' => $comics,
+            'filters' => $request->only(['q', 'status', 'shelf', 'category']),
+            'shelves' => Shelf::visible()->orderBy('sort_order')->get(),
+            'categories' => Category::whereNull('parent_id')->with('children')->orderBy('sort_order')->get(),
+        ]);
     }
 
     public function show(Comic $comic)
@@ -50,7 +80,9 @@ class ComicController extends Controller
             abort(403);
         }
 
-        return view('comics.show', compact('comic'));
+        return Inertia::render('Comics/Show', [
+            'comic' => $comic
+        ]);
     }
 
     public function serve(Comic $comic)
@@ -84,8 +116,36 @@ class ComicController extends Controller
     // Admin Methods
     public function adminIndex()
     {
-        $comics = Comic::latest()->paginate(50);
-        return view('admin.comics.index', compact('comics'));
+        $comics = Comic::with('shelf', 'categories')->latest()
+            ->paginate(50)
+            ->withQueryString();
+
+        return Inertia::render('Admin/Comics/Index', [
+            'comics' => $comics,
+            'shelves' => Shelf::orderBy('sort_order')->get(),
+            'categories' => Category::orderBy('sort_order')->get(),
+        ]);
+    }
+
+    public function update(Request $request, Comic $comic)
+    {
+        $request->validate([
+            'title' => 'required|string|max:255',
+            'shelf_id' => 'nullable|exists:shelves,id',
+            'category_ids' => 'nullable|array',
+            'category_ids.*' => 'exists:categories,id',
+            'is_hidden' => 'required|boolean',
+        ]);
+
+        $comic->update([
+            'title' => $request->title,
+            'shelf_id' => $request->shelf_id,
+            'is_hidden' => $request->is_hidden,
+        ]);
+
+        $comic->categories()->sync($request->category_ids ?? []);
+
+        return back()->with('success', 'Comic updated successfully.');
     }
 
     public function toggleVisibility(Comic $comic)

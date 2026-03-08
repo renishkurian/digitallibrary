@@ -12,11 +12,22 @@ class Comic extends Model
         'path',
         'thumbnail',
         'is_hidden',
+        'shelf_id',
     ];
 
     public function readers()
     {
         return $this->belongsToMany(User::class, 'comic_user');
+    }
+
+    public function shelf()
+    {
+        return $this->belongsTo(Shelf::class);
+    }
+
+    public function categories()
+    {
+        return $this->belongsToMany(Category::class);
     }
 
     public function scopeVisible($query)
