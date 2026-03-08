@@ -94,16 +94,24 @@ class ComicController extends Controller
             abort(403);
         }
 
-        $baseDir = env('COMIC_BASE_DIR');
-        $path = $baseDir . '/' . $comic->path;
+        $baseDir = rtrim(env('COMIC_BASE_DIR'), '/');
+        // Decode the path in case it contains URL-encoded characters like %20 for spaces
+        $comicPath = urldecode(ltrim($comic->path, '/'));
+
+        $path = $baseDir . '/' . $comicPath;
 
         if (!File::exists($path)) {
-            abort(404);
+            return response()->json([
+                'error' => 'File not found',
+                'attempted_path' => $path,
+                'base_dir' => $baseDir,
+                'comic_path' => $comicPath
+            ], 404);
         }
 
         return response()->file($path, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="' . $comic->filename . '"'
+            'Content-Disposition' => 'inline; filename="' . str_replace('"', '\"', $comic->filename) . '"'
         ]);
     }
 
