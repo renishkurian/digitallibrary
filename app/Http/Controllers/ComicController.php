@@ -94,7 +94,7 @@ class ComicController extends Controller
             abort(403);
         }
 
-        $baseDir = rtrim(env('COMIC_BASE_DIR'), '/');
+        $baseDir = rtrim(config('comics.base_dir'), '/');
         // Decode the path in case it contains URL-encoded characters like %20 for spaces
         $comicPath = urldecode(ltrim($comic->path, '/'));
 
@@ -173,7 +173,7 @@ class ComicController extends Controller
 
         $file = $request->file('comic');
         $filename = $file->getClientOriginalName();
-        $baseDir = env('COMIC_BASE_DIR');
+        $baseDir = config('comics.base_dir');
 
         // Save to baseDir
         $path = $file->move($baseDir, $filename);

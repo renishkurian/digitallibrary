@@ -16,8 +16,8 @@ class SyncComics extends Command
 
     public function handle()
     {
-        $baseDir = env('COMIC_BASE_DIR', '/home/nicky/docker/calibre-web/books');
-        $thumbDir = env('COMIC_THUMB_DIR', '/var/www/html/comics/thumbs');
+        $baseDir = config('comics.base_dir');
+        $thumbDir = config('comics.thumb_dir');
 
         if (!is_dir($baseDir)) {
             $this->error("Base directory does not exist: $baseDir");
