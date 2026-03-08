@@ -15,17 +15,22 @@ jobs:
       - name: Install PHP dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
 
+      - name: Copy .env file
+        run: |
+          if [ -f .env.production ]; then
+            cp .env.production .env
+          elif [ ! -f .env ]; then
+            cp .env.example .env
+          fi
+
       - name: Install Node dependencies
         run: npm ci
 
       - name: Build frontend assets
         run: npm run build
 
-      - name: Copy .env file
-        run: cp .env.production .env || true
-
-      - name: Generate app key (if needed)
-        run: php artisan key:generate --force --no-interaction || true
+      - name: Ensure database exists
+        run: touch database/database.sqlite
 
       - name: Run database migrations
         run: php artisan migrate --force --no-interaction
@@ -39,9 +44,9 @@ jobs:
 
       - name: Set permissions
         run: |
-          chmod -R 775 storage bootstrap/cache
-          chown -R www-data:www-data storage bootstrap/cache || true
+          chmod -R 775 storage bootstrap/cache public/build
+          chown -R www-data:www-data storage bootstrap/cache public/build database || true
 
       - name: Restart services
         run: |
-          sudo systemctl restart apache2 || sudo systemctl restart nginx || true
+          sudo systemctl restart apache2 || sudo systemctl restart nginx || sudo systemctl restart php8.4-fpm || true
