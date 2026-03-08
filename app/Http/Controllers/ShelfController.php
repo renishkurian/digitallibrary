@@ -27,6 +27,7 @@ class ShelfController extends Controller
         }
 
         $comics = $shelf->comics()
+            ->withCount('readers')
             ->visible()
             ->latest()
             ->paginate(28)
@@ -35,6 +36,7 @@ class ShelfController extends Controller
                 'title' => $comic->title,
                 'thumbnail' => $comic->thumbnail,
                 'is_read' => Auth::check() ? $comic->isReadBy(Auth::user()) : false,
+                'readers_count' => $comic->readers_count,
             ]);
 
         return Inertia::render('Shelves/Show', [

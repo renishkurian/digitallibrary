@@ -16,7 +16,7 @@ class ComicController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Comic::query();
+        $query = Comic::withCount('readers');
 
         // Guest vs User visibility
         if (!Auth::check() || !Auth::user()->is_admin) {
@@ -64,6 +64,7 @@ class ComicController extends Controller
                 'thumbnail' => $comic->thumbnail,
                 'is_read' => Auth::check() ? $comic->isReadBy(Auth::user()) : false,
                 'is_hidden' => (bool) $comic->is_hidden,
+                'readers_count' => $comic->readers_count,
             ]);
 
         return Inertia::render('Comics/Index', [
@@ -79,6 +80,8 @@ class ComicController extends Controller
         if ($comic->is_hidden && (!Auth::check() || !Auth::user()->is_admin)) {
             abort(403);
         }
+
+        $comic->loadCount('readers');
 
         return Inertia::render('Comics/Show', [
             'comic' => $comic
@@ -116,7 +119,7 @@ class ComicController extends Controller
     // Admin Methods
     public function adminIndex()
     {
-        $comics = Comic::with('shelf', 'categories')->latest()
+        $comics = Comic::with('shelf', 'categories')->withCount('readers')->latest()
             ->paginate(50)
             ->withQueryString();
 

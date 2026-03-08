@@ -12,6 +12,7 @@ class CategoryController extends Controller
     public function show(Category $category)
     {
         $comics = $category->comics()
+            ->withCount('readers')
             ->visible()
             ->latest()
             ->paginate(28)
@@ -20,6 +21,7 @@ class CategoryController extends Controller
                 'title' => $comic->title,
                 'thumbnail' => $comic->thumbnail,
                 'is_read' => Auth::check() ? $comic->isReadBy(Auth::user()) : false,
+                'readers_count' => $comic->readers_count,
             ]);
 
         return Inertia::render('Categories/Show', [

@@ -24,6 +24,13 @@ export default function ComicCard({ comic, auth }) {
                                 <span className="read-status px-2 py-0.5 rounded text-[10px] uppercase tracking-tighter bg-[#e8003d]/20 text-[#e8003d]">UNREAD</span>
                             )
                         )}
+                        <div className="flex items-center gap-1 text-[10px] text-[#8888a0] font-bold">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                            <span>{comic.readers_count}</span>
+                        </div>
                     </div>
                 </div>
             </Link>

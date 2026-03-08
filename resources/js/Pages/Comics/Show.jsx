@@ -108,6 +108,13 @@ export default function Show({ comic }) {
                         Library
                     </Link>
                     <span className="cv-title font-['Bebas_Neue'] text-[18px] tracking-[2px] text-[#f0f0f5] truncate">{comic.title}</span>
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-white/5 border border-white/5 rounded-md text-[#8888a0] text-[11px] font-bold flex-shrink-0">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        <span>{comic.readers_count} READS</span>
+                    </div>
                 </div>
 
                 <div className="flex items-center gap-2.5">
