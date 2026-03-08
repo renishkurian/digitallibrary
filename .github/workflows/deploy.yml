@@ -49,22 +49,34 @@ jobs:
           # Exhaustive permission fix for production
           sudo chown -R www-data:www-data /var/www/html/balarama
           
-          # Ensure all storage directories exist
+          # Ensure all storage directories exist and are fully writable
           sudo mkdir -p /var/www/html/balarama/storage/framework/sessions
           sudo mkdir -p /var/www/html/balarama/storage/framework/views
           sudo mkdir -p /var/www/html/balarama/storage/framework/cache
           sudo mkdir -p /var/www/html/balarama/storage/logs
           
-          sudo chmod -R 775 /var/www/html/balarama/storage /var/www/html/balarama/bootstrap/cache /var/www/html/balarama/database
-          sudo chown -R www-data:www-data /var/www/html/balarama/storage /var/www/html/balarama/bootstrap/cache /var/www/html/balarama/database
+          # More aggressive permissions for Storage and Cache
+          sudo chmod -R 777 /var/www/html/balarama/storage
+          sudo chmod -R 777 /var/www/html/balarama/bootstrap/cache
+          sudo chown -R www-data:www-data /var/www/html/balarama/storage /var/www/html/balarama/bootstrap/cache
           
           # SQLite needs write permission on the directory to create journal files
           sudo chmod 777 /var/www/html/balarama/database
           sudo chmod 666 /var/www/html/balarama/database/database.sqlite
+          sudo chown -R www-data:www-data /var/www/html/balarama/database
           
           # Ensure logs are writable
           sudo touch /var/www/html/balarama/storage/logs/laravel.log
           sudo chmod 666 /var/www/html/balarama/storage/logs/laravel.log
+          sudo chown www-data:www-data /var/www/html/balarama/storage/logs/laravel.log
+
+      - name: Post-sync Laravel optimization
+        run: |
+          cd /var/www/html/balarama
+          sudo -u www-data php artisan cache:clear
+          sudo -u www-data php artisan view:clear
+          sudo -u www-data php artisan config:cache
+          sudo -u www-data php artisan route:cache
 
       - name: Restart services
         run: |
