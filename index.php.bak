@@ -1,0 +1,1887 @@
+<?php
+$baseDir  = "/home/nicky/docker/calibre-web/books";
+$thumbDir = "/var/www/html/comics/thumbs";
+$perPage  = 28;
+
+if (!file_exists($thumbDir)) mkdir($thumbDir, 0755, true);
+
+function scanPDF($dir) {
+    $files = [];
+    $items = scandir($dir);
+    foreach ($items as $item) {
+        if ($item == "." || $item == "..") continue;
+        $path = $dir . "/" . $item;
+        if (is_dir($path)) {
+            $files = array_merge($files, scanPDF($path));
+        } else {
+            if (strtolower(pathinfo($item, PATHINFO_EXTENSION)) == "pdf") {
+                $files[] = $path;
+            }
+        }
+    }
+    return $files;
+}
+
+function thumbKey($pdf) {
+    // Try filename match first (bash pre-gen), fallback to md5
+    global $thumbDir;
+    $byName = pathinfo($pdf, PATHINFO_FILENAME);
+    if (file_exists($thumbDir . "/" . $byName . ".png")) return $byName;
+    $byMd5  = md5($pdf);
+    if (file_exists($thumbDir . "/" . $byMd5  . ".png")) return $byMd5;
+    return $byName; // neither exists — default to filename for new generation
+}
+function thumbExists($pdf) {
+    global $thumbDir;
+    $key = thumbKey($pdf);
+    return file_exists($thumbDir . "/" . $key . ".png");
+}
+function thumbUrl($pdf) {
+    return "thumbs/" . rawurlencode(thumbKey($pdf)) . ".png";
+}
+function thumbRel($pdf) {
+    global $baseDir;
+    return str_replace($baseDir . "/", "", $pdf);
+}
+
+function cleanTitle($filename) {
+    $name = pathinfo($filename, PATHINFO_FILENAME);
+    $name = preg_replace('/[-_]/', ' ', $name);
+    $name = preg_replace('/\s+/', ' ', $name);
+    return trim($name);
+}
+
+$files  = scanPDF($baseDir);
+$search = $_GET['q'] ?? '';
+
+if ($search) {
+    $files = array_filter($files, function ($f) use ($search) {
+        return stripos($f, $search) !== false;
+    });
+    $files = array_values($files);
+}
+
+$total      = count($files);
+$page       = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+$totalPages = max(1, ceil($total / $perPage));
+$start      = ($page - 1) * $perPage;
+$pageFiles  = array_slice($files, $start, $perPage);
+
+// Get featured (first file or random)
+$featured     = $files[0] ?? null;
+$featuredName = $featured ? cleanTitle(basename($featured)) : '';
+$featuredRel  = $featured ? str_replace($baseDir . "/", "", $featured) : '';
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>ComicVault</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0a0a0f;
+    --surface:   #111118;
+    --card:      #16161f;
+    --accent:    #e8003d;
+    --accent2:   #ff6b35;
+    --text:      #f0f0f5;
+    --muted:     #8888a0;
+    --border:    rgba(255,255,255,0.07);
+    --glow:      rgba(232,0,61,0.35);
+    --font-display: 'Bebas Neue', sans-serif;
+    --font-body:    'DM Sans', sans-serif;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-weight: 300;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 2px; }
+
+  /* ── HEADER ── */
+  header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 40px;
+    height: 64px;
+    background: linear-gradient(180deg, rgba(10,10,15,0.98) 0%, rgba(10,10,15,0.0) 100%);
+    backdrop-filter: blur(8px);
+    transition: background 0.3s;
+  }
+
+  header.scrolled {
+    background: rgba(10,10,15,0.97);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo {
+    font-family: var(--font-display);
+    font-size: 28px;
+    letter-spacing: 3px;
+    color: var(--text);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .logo span {
+    color: var(--accent);
+    filter: drop-shadow(0 0 8px var(--glow));
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .search-wrap svg {
+    position: absolute;
+    left: 12px;
+    color: var(--muted);
+    pointer-events: none;
+  }
+
+  .search-wrap input {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 14px;
+    padding: 9px 16px 9px 38px;
+    border-radius: 8px;
+    width: 260px;
+    outline: none;
+    transition: border-color 0.2s, background 0.2s, width 0.3s;
+  }
+
+  .search-wrap input::placeholder { color: var(--muted); }
+  .search-wrap input:focus {
+    border-color: var(--accent);
+    background: rgba(255,255,255,0.1);
+    width: 320px;
+  }
+
+  .search-wrap button {
+    display: none;
+  }
+
+  .badge {
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 5px 12px;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    position: relative;
+    height: 520px;
+    display: flex;
+    align-items: flex-end;
+    padding: 60px 60px 60px;
+    overflow: hidden;
+    margin-top: 0;
+  }
+
+  .hero-bg {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(135deg, rgba(232,0,61,0.18) 0%, transparent 60%),
+      linear-gradient(to top, var(--bg) 0%, rgba(10,10,15,0.3) 60%, transparent 100%),
+      linear-gradient(to right, var(--bg) 0%, transparent 50%);
+    z-index: 1;
+  }
+
+  .hero-grid-bg {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    z-index: 0;
+  }
+
+  .hero-art {
+    position: absolute;
+    right: -20px; top: 0; bottom: 0;
+    width: 60%;
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+    padding: 20px 0;
+    z-index: 0;
+    overflow: hidden;
+    mask-image: linear-gradient(to left, rgba(0,0,0,0.4) 0%, transparent 100%);
+  }
+
+  .hero-art .art-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    animation: scrollUp 30s linear infinite;
+  }
+
+  .hero-art .art-col:nth-child(2) { animation-direction: reverse; animation-duration: 25s; }
+  .hero-art .art-col:nth-child(3) { animation-duration: 35s; }
+
+  @keyframes scrollUp {
+    0%   { transform: translateY(0); }
+    100% { transform: translateY(-50%); }
+  }
+
+  .hero-art .art-card {
+    flex: 0 0 auto;
+    aspect-ratio: 2/3;
+    background: var(--card);
+    border-radius: 8px;
+    overflow: hidden;
+    opacity: 0.5;
+  }
+
+  .hero-art .art-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .hero-content {
+    position: relative;
+    z-index: 2;
+    max-width: 560px;
+  }
+
+  .hero-eyebrow {
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 14px;
+    font-weight: 500;
+  }
+
+  .hero-title {
+    font-family: var(--font-display);
+    font-size: clamp(42px, 6vw, 72px);
+    line-height: 0.95;
+    letter-spacing: 2px;
+    margin-bottom: 16px;
+    text-shadow: 0 2px 40px rgba(0,0,0,0.8);
+  }
+
+  .hero-title .accent { color: var(--accent); }
+
+  .hero-desc {
+    font-size: 15px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 28px;
+    max-width: 420px;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--accent);
+    color: #fff;
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 500;
+    padding: 12px 28px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+    box-shadow: 0 4px 20px rgba(232,0,61,0.4);
+  }
+
+  .btn-primary:hover {
+    background: #ff1a52;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 28px rgba(232,0,61,0.55);
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,255,255,0.08);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 400;
+    padding: 12px 24px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    text-decoration: none;
+    backdrop-filter: blur(4px);
+    transition: background 0.2s, transform 0.15s;
+  }
+
+  .btn-secondary:hover {
+    background: rgba(255,255,255,0.14);
+    transform: translateY(-2px);
+  }
+
+  .hero-stats {
+    display: flex;
+    gap: 32px;
+    margin-top: 32px;
+  }
+
+  .stat { }
+  .stat-num {
+    font-family: var(--font-display);
+    font-size: 28px;
+    letter-spacing: 1px;
+    color: var(--text);
+    line-height: 1;
+  }
+  .stat-label {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: 3px;
+  }
+
+  /* ── MAIN CONTENT ── */
+  main { padding: 0 40px 60px; }
+
+  .section { margin-bottom: 48px; }
+
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+
+  .section-title {
+    font-family: var(--font-display);
+    font-size: 22px;
+    letter-spacing: 2px;
+    color: var(--text);
+  }
+
+  .section-title span {
+    color: var(--accent);
+  }
+
+  .see-all {
+    font-size: 12px;
+    color: var(--muted);
+    text-decoration: none;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: color 0.2s;
+  }
+  .see-all:hover { color: var(--accent); }
+
+  /* ── GRID ── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 16px;
+  }
+
+  /* ── CARD ── */
+  .card {
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--card);
+    cursor: pointer;
+    transition: transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                box-shadow 0.25s;
+    border: 1px solid var(--border);
+    text-decoration: none;
+    display: block;
+    aspect-ratio: 2/3;
+  }
+
+  .card:hover {
+    transform: scale(1.055) translateY(-4px);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.6), 0 0 0 1px rgba(232,0,61,0.3);
+    z-index: 10;
+  }
+
+  .card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: filter 0.3s;
+  }
+
+  .card:hover img { filter: brightness(1.08); }
+
+  .card-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to top,
+      rgba(10,10,15,0.96) 0%,
+      rgba(10,10,15,0.4) 45%,
+      transparent 100%
+    );
+    opacity: 0;
+    transition: opacity 0.25s;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 14px 12px;
+  }
+
+  .card:hover .card-overlay { opacity: 1; }
+
+  .card-title {
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.35;
+    color: #fff;
+    margin-bottom: 8px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .card-actions {
+    display: flex;
+    gap: 7px;
+  }
+
+  .card-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    transition: transform 0.15s, background 0.15s;
+    text-decoration: none;
+  }
+
+  .card-btn.play {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 2px 12px rgba(232,0,61,0.5);
+  }
+  .card-btn.play:hover { background: #ff1a52; transform: scale(1.12); }
+
+  .card-btn.info {
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    backdrop-filter: blur(4px);
+  }
+  .card-btn.info:hover { background: rgba(255,255,255,0.25); transform: scale(1.12); }
+
+  /* always-visible title strip */
+  .card-label {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    padding: 28px 10px 10px;
+    background: linear-gradient(to top, rgba(10,10,15,0.95), transparent);
+    font-size: 11px;
+    font-weight: 400;
+    color: rgba(240,240,245,0.85);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+
+  .card:hover .card-label { opacity: 0; }
+
+  /* placeholder shimmer */
+  .card-placeholder {
+    width: 100%; height: 100%;
+    background: linear-gradient(135deg, #1a1a26 0%, #22222e 50%, #1a1a26 100%);
+    background-size: 200% 200%;
+    animation: shimmer 2s infinite;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 40px;
+  }
+
+  @keyframes shimmer {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* ── PAGINATION ── */
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 40px 0 20px;
+  }
+
+  .page-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px; height: 38px;
+    border-radius: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 14px;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+  }
+
+  .page-btn:hover {
+    background: rgba(232,0,61,0.15);
+    color: var(--text);
+    border-color: rgba(232,0,61,0.4);
+  }
+
+  .page-btn.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    box-shadow: 0 2px 12px rgba(232,0,61,0.4);
+  }
+
+  .page-ellipsis {
+    color: var(--muted);
+    font-size: 14px;
+    padding: 0 4px;
+  }
+
+  /* ── SEARCH RESULTS ── */
+  .results-header {
+    padding: 20px 0 8px;
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  .results-header strong { color: var(--accent); }
+
+  /* ── VIEWER ── */
+  .viewer-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.92);
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    animation: fadeIn 0.3s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  .viewer-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    background: rgba(10,10,15,0.95);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .viewer-title {
+    font-family: var(--font-display);
+    font-size: 20px;
+    letter-spacing: 2px;
+  }
+
+  .viewer-close {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 13px;
+    padding: 8px 16px;
+    border-radius: 7px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.2s;
+  }
+
+  .viewer-close:hover { background: rgba(255,255,255,0.15); }
+
+  .viewer-frame {
+    flex: 1;
+    border: none;
+    width: 100%;
+  }
+
+  /* ── EMPTY STATE ── */
+  .empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--muted);
+  }
+
+  .empty-icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+    opacity: 0.4;
+  }
+
+  .empty-title {
+    font-family: var(--font-display);
+    font-size: 28px;
+    letter-spacing: 2px;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    header { padding: 0 20px; }
+    .hero { padding: 40px 20px 40px; height: auto; min-height: 380px; }
+    main { padding: 0 16px 40px; }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+    .search-wrap input { width: 180px; }
+    .search-wrap input:focus { width: 220px; }
+    .hero-art { width: 50%; right: -10px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header id="mainHeader">
+  <a href="index.php" class="logo">Comic<span>Vault</span></a>
+  <div class="header-right">
+    <form class="search-wrap" method="get" action="index.php">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input
+        name="q"
+        type="search"
+        placeholder="Search comics..."
+        value="<?php echo htmlspecialchars($search); ?>"
+        autocomplete="off">
+      <button type="submit"></button>
+    </form>
+    <span class="badge"><?php echo $total; ?> Comics</span>
+  </div>
+</header>
+
+<?php if (!isset($_GET['view'])): ?>
+
+<!-- HERO -->
+<?php if (!$search && $featured): ?>
+<section class="hero">
+  <div class="hero-grid-bg"></div>
+
+  <!-- Animated background art columns -->
+  <div class="hero-art" id="heroArt">
+    <?php
+    $artFiles = array_slice($files, 0, 18);
+    $cols = array_chunk($artFiles, 6);
+    foreach (array_slice($cols, 0, 3) as $col):
+    ?>
+    <div class="art-col">
+      <?php foreach (array_merge($col, $col) as $af): // doubled for seamless loop
+        $aHash = md5($af);
+        $aRel  = thumbRel($af);
+      ?>
+      <div class="art-card">
+        <img
+          src="<?php echo thumbExists($af) ? htmlspecialchars(thumbUrl($af)) : ''; ?>"
+          data-src="<?php echo htmlspecialchars(thumbUrl($af)); ?>"
+          data-gen="<?php echo urlencode($aRel); ?>"
+          alt="" loading="lazy"
+          class="lazy-thumb"
+          style="<?php echo thumbExists($af) ? '' : 'visibility:hidden;'; ?>width:100%;height:100%;object-fit:cover;">
+      </div>
+      <?php endforeach; ?>
+    </div>
+    <?php endforeach; ?>
+  </div>
+
+  <div class="hero-bg"></div>
+
+  <div class="hero-content">
+    <p class="hero-eyebrow">&#9733; Featured Collection</p>
+    <h1 class="hero-title">Your <span class="accent">Comic</span><br>Universe</h1>
+    <p class="hero-desc">
+      Dive into your personal library of comics and graphic novels.
+      Every story, instantly readable in your browser.
+    </p>
+    <div class="hero-actions">
+      <a href="?view=<?php echo urlencode($featuredRel); ?>" class="btn-primary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        Read Now
+      </a>
+      <a href="#library" class="btn-secondary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+          <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+        </svg>
+        Browse All
+      </a>
+    </div>
+    <div class="hero-stats">
+      <div class="stat">
+        <div class="stat-num"><?php echo $total; ?></div>
+        <div class="stat-label">Comics</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num"><?php echo $totalPages; ?></div>
+        <div class="stat-label">Pages</div>
+      </div>
+    </div>
+  </div>
+</section>
+<?php endif; ?>
+
+<!-- MAIN LIBRARY -->
+<main id="library" style="margin-top: <?php echo $search ? '80px' : '0'; ?>;">
+
+  <?php if ($search): ?>
+  <div class="results-header">
+    Showing <strong><?php echo $total; ?></strong> result<?php echo $total != 1 ? 's' : ''; ?> for
+    &ldquo;<strong><?php echo htmlspecialchars($search); ?></strong>&rdquo;
+    &nbsp;&mdash;&nbsp;<a href="index.php" style="color:var(--accent);text-decoration:none;font-size:12px;">Clear</a>
+  </div>
+  <?php endif; ?>
+
+  <div class="section">
+    <div class="section-header">
+      <h2 class="section-title">
+        <?php echo $search
+          ? 'Search <span>Results</span>'
+          : ($page > 1 ? 'Library &mdash; <span>Page ' . $page . '</span>' : 'All <span>Comics</span>');
+        ?>
+      </h2>
+      <?php if (!$search): ?>
+      <span style="font-size:12px;color:var(--muted);">
+        <?php echo (($page-1)*$perPage+1); ?>–<?php echo min($page*$perPage,$total); ?> of <?php echo $total; ?>
+      </span>
+      <?php endif; ?>
+    </div>
+
+    <?php if (empty($pageFiles)): ?>
+    <div class="empty-state">
+      <div class="empty-icon">📚</div>
+      <div class="empty-title">No Comics Found</div>
+      <p>Try a different search term or check your library path.</p>
+    </div>
+    <?php else: ?>
+    <div class="grid">
+      <?php foreach ($pageFiles as $pdf):
+        $rel      = str_replace($baseDir . "/", "", $pdf);
+        $name     = cleanTitle(basename($pdf));
+        $link     = "index.php?view=" . urlencode($rel) . ($search ? "&q=" . urlencode($search) : "") . "&page=$page";
+        $hasThumb = thumbExists($pdf);
+      ?>
+      <a class="card" href="<?php echo htmlspecialchars($link); ?>">
+        <?php if ($hasThumb): ?>
+          <img src="<?php echo htmlspecialchars(thumbUrl($pdf)); ?>"
+               alt="<?php echo htmlspecialchars($name); ?>"
+               loading="lazy">
+        <?php else: ?>
+          <div class="card-placeholder lazy-thumb-wrap"
+               data-gen="<?php echo urlencode(thumbRel($pdf)); ?>"
+               data-img-alt="<?php echo htmlspecialchars($name); ?>">📖</div>
+        <?php endif; ?>
+
+        <div class="card-label"><?php echo htmlspecialchars($name); ?></div>
+
+        <div class="card-overlay">
+          <div class="card-title"><?php echo htmlspecialchars($name); ?></div>
+          <div class="card-actions">
+            <span class="card-btn play" title="Read">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            </span>
+            <span class="card-btn info" title="Info">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12.01" y2="8"/>
+              </svg>
+            </span>
+          </div>
+        </div>
+      </a>
+      <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+  </div>
+
+  <!-- PAGINATION -->
+  <?php if ($totalPages > 1): ?>
+  <div class="pagination">
+    <?php
+    $qs = $search ? "&q=" . urlencode($search) : "";
+
+    if ($page > 1):
+      echo "<a class='page-btn' href='?page=" . ($page-1) . "$qs'>
+              <svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
+                <polyline points='15 18 9 12 15 6'/>
+              </svg>
+            </a>";
+    endif;
+
+    // smart page range
+    $range  = 2;
+    $start2 = max(1, $page - $range);
+    $end2   = min($totalPages, $page + $range);
+
+    if ($start2 > 1) {
+      echo "<a class='page-btn' href='?page=1$qs'>1</a>";
+      if ($start2 > 2) echo "<span class='page-ellipsis'>…</span>";
+    }
+
+    for ($i = $start2; $i <= $end2; $i++) {
+      $cls = ($i == $page) ? "page-btn active" : "page-btn";
+      echo "<a class='$cls' href='?page=$i$qs'>$i</a>";
+    }
+
+    if ($end2 < $totalPages) {
+      if ($end2 < $totalPages - 1) echo "<span class='page-ellipsis'>…</span>";
+      echo "<a class='page-btn' href='?page={$totalPages}$qs'>{$totalPages}</a>";
+    }
+
+    if ($page < $totalPages):
+      echo "<a class='page-btn' href='?page=" . ($page+1) . "$qs'>
+              <svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
+                <polyline points='9 18 15 12 9 6'/>
+              </svg>
+            </a>";
+    endif;
+    ?>
+  </div>
+  <?php endif; ?>
+
+</main>
+
+<?php endif; // !view ?>
+
+<!-- PDF VIEWER -->
+<?php if (isset($_GET['view'])): ?>
+<?php
+  $viewFile   = realpath($baseDir . "/" . $_GET['view']);
+  $backPage   = isset($_GET['page'])   ? (int)$_GET['page']        : 1;
+  $backSearch = isset($_GET['q'])      ? $_GET['q']                : '';
+  $backUrl    = "index.php?page=$backPage" . ($backSearch ? "&q=" . urlencode($backSearch) : "");
+  $viewTitle  = $viewFile ? cleanTitle(basename($viewFile)) : 'Unknown';
+  $pdfUrl     = "serve.php?file=" . urlencode($_GET['view']);
+
+  if ($viewFile && str_starts_with($viewFile, $baseDir)):
+?>
+
+<!-- PDF.js from CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+
+<style>
+  .cv-viewer {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: #0a0a0f;
+    display: flex;
+    flex-direction: column;
+    animation: fadeIn 0.25s ease;
+  }
+
+  /* ── TOP BAR ── */
+  .cv-bar {
+    flex-shrink: 0;
+    height: 56px;
+    background: rgba(10,10,15,0.97);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    gap: 12px;
+    backdrop-filter: blur(10px);
+  }
+
+  .cv-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .cv-back {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #f0f0f5;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 7px 14px;
+    border-radius: 7px;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .cv-back:hover { background: rgba(255,255,255,0.13); }
+
+  .cv-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 2px;
+    color: #f0f0f5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .cv-bar-center {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .cv-nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px; height: 34px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 7px;
+    color: #f0f0f5;
+    cursor: pointer;
+    transition: background 0.2s, opacity 0.2s;
+    flex-shrink: 0;
+  }
+  .cv-nav-btn:hover { background: rgba(255,255,255,0.13); }
+  .cv-nav-btn:disabled { opacity: 0.3; cursor: default; }
+
+  .cv-page-info {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    color: #8888a0;
+    white-space: nowrap;
+    min-width: 80px;
+    text-align: center;
+  }
+
+  .cv-page-input {
+    width: 48px;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #f0f0f5;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    text-align: center;
+    padding: 5px 6px;
+    border-radius: 6px;
+    outline: none;
+  }
+  .cv-page-input:focus { border-color: #e8003d; }
+
+  .cv-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .cv-zoom-label {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    color: #8888a0;
+    min-width: 42px;
+    text-align: center;
+  }
+
+  /* ── SCROLL AREA ── */
+  .cv-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 28px 20px 60px;
+    scroll-behavior: smooth;
+    background: #0d0d14;
+  }
+
+  .cv-scroll::-webkit-scrollbar { width: 4px; }
+  .cv-scroll::-webkit-scrollbar-track { background: #0a0a0f; }
+  .cv-scroll::-webkit-scrollbar-thumb { background: #e8003d; border-radius: 2px; }
+
+  .cv-page-wrap {
+    position: relative;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+    border-radius: 4px;
+    overflow: hidden;
+    background: #fff;
+    line-height: 0;
+    transition: box-shadow 0.2s;
+  }
+
+  .cv-page-wrap canvas {
+    display: block;
+    max-width: 100%;
+  }
+
+  .cv-page-num-badge {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    background: rgba(0,0,0,0.55);
+    color: rgba(255,255,255,0.7);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    pointer-events: none;
+    backdrop-filter: blur(4px);
+  }
+
+  /* ── LOADING ── */
+  .cv-loading {
+    position: fixed;
+    inset: 56px 0 0 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    z-index: 5;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+
+  .cv-spinner {
+    width: 40px; height: 40px;
+    border: 3px solid rgba(232,0,61,0.2);
+    border-top-color: #e8003d;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .cv-loading-text {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    color: #8888a0;
+    letter-spacing: 1px;
+  }
+
+  /* ── THUMBNAIL STRIP ── */
+  .cv-thumbs {
+    position: fixed;
+    left: 0;
+    top: 56px;
+    bottom: 0;
+    width: 0;
+    background: rgba(10,10,15,0.97);
+    border-right: 1px solid rgba(255,255,255,0.07);
+    overflow-y: auto;
+    overflow-x: hidden;
+    transition: width 0.3s cubic-bezier(0.4,0,0.2,1);
+    z-index: 10;
+  }
+
+  .cv-thumbs.open { width: 130px; }
+  .cv-thumbs::-webkit-scrollbar { width: 3px; }
+  .cv-thumbs::-webkit-scrollbar-thumb { background: #e8003d; }
+
+  .cv-thumb-inner {
+    padding: 12px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 130px;
+  }
+
+  .cv-thumb-item {
+    cursor: pointer;
+    border-radius: 5px;
+    overflow: hidden;
+    border: 2px solid transparent;
+    transition: border-color 0.15s, transform 0.15s;
+    background: #1a1a26;
+    line-height: 0;
+  }
+
+  .cv-thumb-item:hover { border-color: rgba(232,0,61,0.5); transform: scale(1.02); }
+  .cv-thumb-item.active { border-color: #e8003d; }
+
+  .cv-thumb-item canvas {
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  .cv-thumb-label {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 10px;
+    color: #8888a0;
+    text-align: center;
+    padding: 3px 0 4px;
+    background: #111118;
+  }
+
+  /* ── KEYBOARD HINT ── */
+  .cv-keys {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    gap: 8px;
+    opacity: 0;
+    animation: fadeKeys 4s ease 1.5s forwards;
+  }
+
+  @keyframes fadeKeys {
+    0%   { opacity: 0; transform: translateY(8px); }
+    20%  { opacity: 1; transform: translateY(0); }
+    80%  { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  .cv-key {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #8888a0;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 5px;
+  }
+
+  @keyframes tapFade {
+    0%   { opacity: 1; }
+    70%  { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  /* ── MOBILE BOTTOM BAR ── */
+  .cv-mobile-bar {
+    display: none;
+    flex-shrink: 0;
+    height: 56px;
+    background: rgba(10,10,15,0.97);
+    border-top: 1px solid rgba(255,255,255,0.07);
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  .cv-desktop-only { display: flex; }
+
+  /* ── MOBILE: hide top-bar center controls, show bottom bar ── */
+  @media (max-width: 640px) {
+    .cv-bar { padding: 0 12px; gap: 8px; }
+    .cv-bar-center { display: none; }
+    .cv-bar-right  { display: none; }
+    .cv-title { font-size: 14px; }
+    .cv-back  { padding: 6px 10px; font-size: 12px; }
+    .cv-mobile-bar { display: flex; }
+    .cv-desktop-only { display: none !important; }
+    .cv-scroll { padding: 12px 8px 16px; }
+    /* canvas touch action: pan-y allows vertical scroll, we handle horizontal */
+    #cvCanvas { touch-action: pan-y; cursor: pointer; }
+  }
+
+  @media (min-width: 641px) {
+    .cv-mobile-bar { display: none !important; }
+    #cvCanvas { touch-action: pan-y; }
+  }
+</style>
+
+<div class="cv-viewer" id="cvViewer">
+
+  <!-- TOP BAR -->
+  <div class="cv-bar">
+    <div class="cv-bar-left">
+      <a href="<?php echo htmlspecialchars($backUrl); ?>" class="cv-back">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        Library
+      </a>
+      <span class="cv-title"><?php echo htmlspecialchars($viewTitle); ?></span>
+    </div>
+
+    <div class="cv-bar-center">
+      <button class="cv-nav-btn" id="btnThumb" title="Toggle thumbnails" onclick="toggleThumbs()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+          <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+        </svg>
+      </button>
+      <button class="cv-nav-btn" id="btnPrev" onclick="goPage(-1)" disabled>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </button>
+      <input class="cv-page-input" id="pageInput" type="number" min="1" value="1"
+             onchange="jumpPage(this.value)" onkeydown="if(event.key==='Enter')jumpPage(this.value)">
+      <span class="cv-page-info">/ <span id="totalPages">—</span></span>
+      <button class="cv-nav-btn" id="btnNext" onclick="goPage(1)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="cv-bar-right">
+      <button class="cv-nav-btn" onclick="zoom(-0.15)" title="Zoom out">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          <line x1="8" y1="11" x2="14" y2="11"/>
+        </svg>
+      </button>
+      <span class="cv-zoom-label" id="zoomLabel">100%</span>
+      <button class="cv-nav-btn" onclick="zoom(0.15)" title="Zoom in">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          <line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>
+        </svg>
+      </button>
+      <button class="cv-nav-btn" onclick="fitWidth()" title="Fit to width" style="margin-left:4px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+          <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- THUMBNAIL STRIP -->
+  <div class="cv-thumbs" id="cvThumbs">
+    <div class="cv-thumb-inner" id="thumbInner"></div>
+  </div>
+
+  <!-- LOADING -->
+  <div class="cv-loading" id="cvLoading">
+    <div class="cv-spinner"></div>
+    <div class="cv-loading-text">Loading comic…</div>
+  </div>
+
+  <!-- ERROR -->
+  <div id="cvError" style="display:none;position:absolute;inset:56px 0 0 0;align-items:center;justify-content:center;flex-direction:column;gap:12px;background:#0a0a0f;">
+    <div style="color:#e8003d;font-family:'DM Sans',sans-serif;font-size:15px;">Failed to load PDF</div>
+    <div class="cv-err-msg" style="color:#8888a0;font-family:'DM Sans',sans-serif;font-size:12px;"></div>
+  </div>
+
+  <!-- CANVAS SCROLL AREA -->
+  <div class="cv-scroll" id="cvScroll">
+    <canvas id="cvCanvas" style="display:block;box-shadow:0 8px 40px rgba(0,0,0,0.7);border-radius:4px;max-width:100%;"></canvas>
+  </div>
+
+  <!-- SWIPE HINT INDICATOR -->
+  <div id="swipeHint" style="
+    position:fixed;top:50%;
+    transform:translateY(-50%) scale(0.7);
+    background:rgba(232,0,61,0.85);
+    color:#fff;
+    font-size:28px;
+    width:52px;height:52px;
+    border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    opacity:0;
+    transition:opacity 0.3s,transform 0.3s;
+    pointer-events:none;
+    z-index:50;
+    backdrop-filter:blur(4px);
+  "></div>
+
+  <!-- TAP ZONE HINTS (mobile only, fade out) -->
+  <div id="tapHints" style="
+    position:fixed;inset:56px 0 56px 0;
+    display:flex;pointer-events:none;z-index:5;
+    animation:tapFade 3s ease 1s forwards;
+  ">
+    <div style="width:25%;display:flex;align-items:center;justify-content:center;">
+      <div style="background:rgba(255,255,255,0.06);border-radius:8px;padding:10px 14px;color:rgba(255,255,255,0.3);font-family:'DM Sans',sans-serif;font-size:12px;">◀ Prev</div>
+    </div>
+    <div style="flex:1;"></div>
+    <div style="width:25%;display:flex;align-items:center;justify-content:center;">
+      <div style="background:rgba(255,255,255,0.06);border-radius:8px;padding:10px 14px;color:rgba(255,255,255,0.3);font-family:'DM Sans',sans-serif;font-size:12px;">Next ▶</div>
+    </div>
+  </div>
+
+  <!-- MOBILE BOTTOM BAR -->
+  <div class="cv-mobile-bar" id="cvMobileBar">
+    <button class="cv-nav-btn" onclick="window.goPage(-1)" id="mBtnPrev">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <div style="display:flex;align-items:center;gap:6px;flex:1;justify-content:center;">
+      <input class="cv-page-input" id="mPageInput" type="number" min="1" value="1"
+        style="width:52px;"
+        onchange="jumpPage(this.value);document.getElementById('pageInput').value=this.value;"
+        onkeydown="if(event.key==='Enter'){jumpPage(this.value);document.getElementById('pageInput').value=this.value;}">
+      <span style="color:#8888a0;font-family:'DM Sans',sans-serif;font-size:13px;">/ <span id="mTotalPages">—</span></span>
+    </div>
+    <button class="cv-nav-btn" onclick="window.zoom(0.2)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        <line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>
+      </svg>
+    </button>
+    <button class="cv-nav-btn" onclick="window.zoom(-0.2)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        <line x1="8" y1="11" x2="14" y2="11"/>
+      </svg>
+    </button>
+    <button class="cv-nav-btn" onclick="fitWidth()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+        <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+      </svg>
+    </button>
+    <button class="cv-nav-btn" onclick="window.goPage(1)" id="mBtnNext">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  </div>
+
+  <!-- KEYBOARD HINT (desktop only) -->
+  <div class="cv-keys cv-desktop-only">
+    <span class="cv-key">← →</span>
+    <span class="cv-key">+  −</span>
+    <span class="cv-key">F  fit</span>
+  </div>
+</div>
+
+<script>
+// Wait for PDF.js to be fully available before doing anything
+window.addEventListener('load', function() {
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+  const PDF_URL   = <?php echo json_encode($pdfUrl); ?>;
+  const BACK_URL  = <?php echo json_encode($backUrl); ?>;
+
+  const canvas    = document.getElementById('cvCanvas');
+  const ctx       = canvas.getContext('2d');
+  const loading   = document.getElementById('cvLoading');
+  const errBox    = document.getElementById('cvError');
+  const totalEl   = document.getElementById('totalPages');
+  const pageInput = document.getElementById('pageInput');
+  const btnPrev   = document.getElementById('btnPrev');
+  const btnNext   = document.getElementById('btnNext');
+  const zoomLabel = document.getElementById('zoomLabel');
+  const thumbsPanel = document.getElementById('cvThumbs');
+  const thumbInner  = document.getElementById('thumbInner');
+  const cvScroll    = document.getElementById('cvScroll');
+
+  let pdfDoc      = null;
+  let currentPage = 1;
+  let numPages    = 0;
+  let scale       = 1.0;
+  let rendering   = false;
+  let thumbsOpen  = false;
+  let renderTask  = null;
+
+  // ── LOAD ──
+  pdfjsLib.getDocument({ url: PDF_URL, withCredentials: false }).promise
+    .then(function(pdf) {
+      pdfDoc   = pdf;
+      numPages = pdf.numPages;
+      totalEl.textContent = numPages;
+      pageInput.max       = numPages;
+      loading.style.display = 'none';
+      renderCurrentPage();
+      buildThumbs();
+    })
+    .catch(function(err) {
+      loading.style.display = 'none';
+      errBox.style.display  = 'flex';
+      errBox.querySelector('.cv-err-msg').textContent = err.message || 'Unknown error';
+      console.error('PDF.js error:', err);
+    });
+
+  // ── RENDER CURRENT PAGE ──
+  function renderCurrentPage() {
+    if (!pdfDoc || rendering) return;
+    rendering = true;
+
+    // cancel previous render if still going
+    if (renderTask) { renderTask.cancel(); renderTask = null; }
+
+    pdfDoc.getPage(currentPage).then(function(page) {
+      const vp = page.getViewport({ scale: scale });
+      canvas.width  = vp.width;
+      canvas.height = vp.height;
+
+      renderTask = page.render({ canvasContext: ctx, viewport: vp });
+      return renderTask.promise;
+    })
+    .then(function() {
+      rendering  = false;
+      renderTask = null;
+      updateUI();
+    })
+    .catch(function(err) {
+      rendering = false;
+      if (err && err.name !== 'RenderingCancelledException') {
+        console.error('Render error:', err);
+      }
+    });
+  }
+
+  function updateUI() {
+    pageInput.value  = currentPage;
+    btnPrev.disabled = currentPage <= 1;
+    btnNext.disabled = currentPage >= numPages;
+    zoomLabel.textContent = Math.round(scale * 100) + '%';
+    // sync mobile bar
+    var mpi = document.getElementById('mPageInput');
+    var mtp = document.getElementById('mTotalPages');
+    var mbp = document.getElementById('mBtnPrev');
+    var mbn = document.getElementById('mBtnNext');
+    if (mpi) mpi.value = currentPage;
+    if (mtp) mtp.textContent = numPages;
+    if (mbp) mbp.disabled = currentPage <= 1;
+    if (mbn) mbn.disabled = currentPage >= numPages;
+    // highlight active thumb
+    thumbInner.querySelectorAll('.cv-thumb-item').forEach(function(t) {
+      t.classList.toggle('active', parseInt(t.dataset.page) === currentPage);
+    });
+    // scroll active thumb into view
+    const activeThumb = thumbInner.querySelector('.cv-thumb-item.active');
+    if (activeThumb && thumbsOpen) activeThumb.scrollIntoView({ block: 'nearest' });
+  }
+
+  // ── BUILD THUMBNAILS (lazy, batch of 5) ──
+  function buildThumbs() {
+    thumbInner.innerHTML = '';
+    for (let i = 1; i <= numPages; i++) {
+      const item = document.createElement('div');
+      item.className    = 'cv-thumb-item';
+      item.dataset.page = i;
+      const lbl = document.createElement('div');
+      lbl.className   = 'cv-thumb-label';
+      lbl.textContent = i;
+      item.appendChild(lbl);
+      item.addEventListener('click', function() {
+        currentPage = parseInt(this.dataset.page);
+        renderCurrentPage();
+      });
+      thumbInner.appendChild(item);
+    }
+    renderThumbBatch(1);
+  }
+
+  function renderThumbBatch(startPage) {
+    const batchSize = 5;
+    const end = Math.min(startPage + batchSize - 1, numPages);
+    const promises = [];
+    for (let i = startPage; i <= end; i++) {
+      promises.push(renderThumb(i));
+    }
+    Promise.all(promises).then(function() {
+      if (end < numPages) setTimeout(function() { renderThumbBatch(end + 1); }, 50);
+    });
+  }
+
+  function renderThumb(num) {
+    return pdfDoc.getPage(num).then(function(page) {
+      const vp  = page.getViewport({ scale: 0.2 });
+      const c   = document.createElement('canvas');
+      c.width   = vp.width;
+      c.height  = vp.height;
+      const item = thumbInner.querySelector('.cv-thumb-item[data-page="' + num + '"]');
+      if (item) item.insertBefore(c, item.firstChild);
+      return page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+    });
+  }
+
+  // ── AUTO FIT WIDTH ──
+  function fitWidth() {
+    if (!pdfDoc) return;
+    pdfDoc.getPage(currentPage).then(function(page) {
+      const vp        = page.getViewport({ scale: 1 });
+      const available = cvScroll.clientWidth - 40;
+      scale = available / vp.width;
+      scale = Math.max(0.3, Math.min(4.0, scale));
+      renderCurrentPage();
+    });
+  }
+
+  // ── NAVIGATION ──
+  window.goPage = function(dir) {
+    const np = currentPage + dir;
+    if (np < 1 || np > numPages) return;
+    currentPage = np;
+    renderCurrentPage();
+  };
+
+  window.jumpPage = function(val) {
+    const p = Math.max(1, Math.min(numPages, parseInt(val) || 1));
+    currentPage = p;
+    renderCurrentPage();
+  };
+
+  window.zoom = function(delta) {
+    scale = Math.max(0.3, Math.min(4.0, scale + delta));
+    renderCurrentPage();
+  };
+
+  window.fitWidth = fitWidth;
+
+  window.toggleThumbs = function() {
+    thumbsOpen = !thumbsOpen;
+    thumbsPanel.classList.toggle('open', thumbsOpen);
+    cvScroll.style.marginLeft = thumbsOpen ? '130px' : '0';
+  };
+
+  // ── KEYBOARD ──
+  document.addEventListener('keydown', function(e) {
+    if (e.target.tagName === 'INPUT') return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); window.goPage(1); }
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')                    { e.preventDefault(); window.goPage(-1); }
+    if (e.key === '+' || e.key === '=') window.zoom(0.2);
+    if (e.key === '-')                  window.zoom(-0.2);
+    if (e.key === 'f' || e.key === 'F') fitWidth();
+    if (e.key === 'Escape') { window.location.href = BACK_URL; }
+  });
+
+  // ── SWIPE / TOUCH ──
+  var touchStartX = 0, touchStartY = 0;
+  var touchStartDist = 0;
+  var swipeStartScale = 1.0;
+  var isSwiping = false;
+
+  function getTouchDist(e) {
+    var dx = e.touches[0].clientX - e.touches[1].clientX;
+    var dy = e.touches[0].clientY - e.touches[1].clientY;
+    return Math.sqrt(dx*dx + dy*dy);
+  }
+
+  cvScroll.addEventListener('touchstart', function(e) {
+    if (e.touches.length === 2) {
+      touchStartDist = getTouchDist(e);
+      swipeStartScale = scale;
+      isSwiping = false;
+    } else if (e.touches.length === 1) {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      isSwiping = true;
+    }
+  }, { passive: true });
+
+  cvScroll.addEventListener('touchmove', function(e) {
+    if (e.touches.length === 2) {
+      // pinch-to-zoom
+      isSwiping = false;
+      var dist = getTouchDist(e);
+      var newScale = swipeStartScale * (dist / touchStartDist);
+      scale = Math.max(0.3, Math.min(4.0, newScale));
+      zoomLabel.textContent = Math.round(scale * 100) + '%';
+    }
+  }, { passive: true });
+
+  cvScroll.addEventListener('touchend', function(e) {
+    if (!isSwiping || e.changedTouches.length !== 1) {
+      // pinch ended — re-render at new scale
+      if (e.touches.length === 0 && e.changedTouches.length === 2) {
+        renderCurrentPage();
+      }
+      return;
+    }
+    var dx = e.changedTouches[0].clientX - touchStartX;
+    var dy = e.changedTouches[0].clientY - touchStartY;
+    var absDx = Math.abs(dx);
+    var absDy = Math.abs(dy);
+
+    // Only treat as horizontal swipe if clearly horizontal (not a scroll)
+    if (absDx > 50 && absDx > absDy * 1.5) {
+      e.preventDefault();
+      if (dx < 0) {
+        window.goPage(1);   // swipe left = next
+      } else {
+        window.goPage(-1);  // swipe right = prev
+      }
+      showSwipeHint(dx < 0 ? 'next' : 'prev');
+    }
+  }, { passive: false });
+
+  // ── TAP ZONES (tap left 25% = prev, right 25% = next) ──
+  cvScroll.addEventListener('click', function(e) {
+    if (e.target.tagName === 'CANVAS') {
+      var x = e.clientX;
+      var w = window.innerWidth;
+      if (x < w * 0.25) {
+        window.goPage(-1);
+        showSwipeHint('prev');
+      } else if (x > w * 0.75) {
+        window.goPage(1);
+        showSwipeHint('next');
+      }
+    }
+  });
+
+  // ── SWIPE HINT ANIMATION ──
+  function showSwipeHint(dir) {
+    var hint = document.getElementById('swipeHint');
+    hint.textContent = dir === 'next' ? '▶' : '◀';
+    hint.style.left  = dir === 'next' ? 'auto' : '20px';
+    hint.style.right = dir === 'next' ? '20px' : 'auto';
+    hint.style.opacity = '1';
+    hint.style.transform = 'translateY(-50%) scale(1)';
+    clearTimeout(hint._t);
+    hint._t = setTimeout(function() {
+      hint.style.opacity = '0';
+      hint.style.transform = 'translateY(-50%) scale(0.7)';
+    }, 400);
+  }
+
+  // ── ORIENTATION CHANGE ──
+  window.addEventListener('orientationchange', function() {
+    setTimeout(fitWidth, 300);
+  });
+  window.addEventListener('resize', function() {
+    clearTimeout(window._resizeT);
+    window._resizeT = setTimeout(fitWidth, 200);
+  });
+
+  // auto fit on ready
+  setTimeout(fitWidth, 100);
+});
+</script>
+
+<?php else: ?>
+<div style="padding:80px;text-align:center;margin-top:80px;">
+  <p style="color:#e8003d;">Access denied or file not found.</p>
+  <a href="index.php" style="margin-top:20px;display:inline-flex;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);color:#f0f0f5;padding:10px 20px;border-radius:8px;text-decoration:none;">← Back to Library</a>
+</div>
+<?php endif; ?>
+<?php endif; ?>
+
+<script>
+  // Sticky header
+  const header = document.getElementById('mainHeader');
+  window.addEventListener('scroll', () => {
+    header.classList.toggle('scrolled', window.scrollY > 20);
+  });
+
+  // Live search on type (debounced)
+  const searchInput = document.querySelector('input[name="q"]');
+  if (searchInput) {
+    let timer;
+    searchInput.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        searchInput.closest('form').submit();
+      }, 500);
+    });
+  }
+
+  // Card entrance animation
+  const cards = document.querySelectorAll('.card');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry, i) => {
+      if (entry.isIntersecting) {
+        entry.target.style.animationDelay = (i % 8 * 0.04) + 's';
+        entry.target.classList.add('card-visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.1 });
+
+  cards.forEach(card => observer.observe(card));
+</script>
+
+<style>
+  .card {
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity 0.4s ease, transform 0.4s ease,
+                box-shadow 0.25s, transform 0.25s cubic-bezier(0.25,0.46,0.45,0.94);
+  }
+  .card.card-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .card.card-visible:hover {
+    transform: scale(1.055) translateY(-4px) !important;
+  }
+</style>
+
+
+<script>
+// ── LAZY ASYNC THUMBNAIL LOADER ──
+// Generates missing thumbs on-demand via thumb.php?gen=1
+// Uses IntersectionObserver so only visible cards trigger generation
+// Retries up to 5x with exponential backoff if thumb isn't ready yet
+
+(function() {
+  var CONCURRENCY = 4; // max parallel thumb generations
+  var active = 0;
+  var queue = [];
+
+  function processQueue() {
+    while (active < CONCURRENCY && queue.length > 0) {
+      var job = queue.shift();
+      active++;
+      generateThumb(job.rel, job.el, job.attempt || 1);
+    }
+  }
+
+  function generateThumb(rel, el, attempt) {
+    fetch('thumb.php?gen=1&pdf=' + encodeURIComponent(rel))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        active--;
+        if (data.ok) {
+          swapInThumb(el, data.url);
+        } else if (attempt < 3) {
+          // retry after delay
+          setTimeout(function() {
+            active++;
+            generateThumb(rel, el, attempt + 1);
+          }, attempt * 1500);
+        }
+        processQueue();
+      })
+      .catch(function() {
+        active--;
+        processQueue();
+      });
+  }
+
+  function swapInThumb(el, url) {
+    if (!el || !el.parentNode) return;
+    var card = el.closest('.card');
+
+    if (el.tagName === 'DIV') {
+      // card-placeholder -> replace with real img
+      var img = document.createElement('img');
+      img.src = url;
+      img.alt = el.dataset.imgAlt || '';
+      img.loading = 'lazy';
+      img.style.width = '100%';
+      img.style.height = '100%';
+      img.style.objectFit = 'cover';
+      img.style.display = 'block';
+      el.parentNode.insertBefore(img, el);
+      el.parentNode.removeChild(el);
+    } else if (el.tagName === 'IMG') {
+      // lazy-thumb img -> reveal
+      el.src = url;
+      el.style.visibility = 'visible';
+    }
+  }
+
+  // Observe cards/placeholders
+  var io = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (!entry.isIntersecting) return;
+      io.unobserve(entry.target);
+
+      var el = entry.target;
+      var rel = el.dataset.gen;
+      if (!rel) return;
+
+      // Already loaded?
+      if (el.tagName === 'IMG' && el.src && !el.src.endsWith('/')) return;
+
+      queue.push({ rel: rel, el: el });
+      processQueue();
+    });
+  }, {
+    rootMargin: '200px 0px', // start loading 200px before visible
+    threshold: 0
+  });
+
+  // Observe all placeholders and lazy hero images
+  function observeAll() {
+    document.querySelectorAll('.lazy-thumb-wrap, img.lazy-thumb').forEach(function(el) {
+      io.observe(el);
+    });
+  }
+
+  // Run on DOM ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', observeAll);
+  } else {
+    observeAll();
+  }
+
+  // Pre-warm: kick off thumb generation for ALL comics in background
+  // (fires after page is fully rendered so it never delays display)
+  window.addEventListener('load', function() {
+    setTimeout(function() {
+      // collect all rels that still need thumbs (not yet in queue/generated)
+      document.querySelectorAll('.lazy-thumb-wrap[data-gen]').forEach(function(el) {
+        if (!el._queued) {
+          el._queued = true;
+          queue.push({ rel: el.dataset.gen, el: el });
+        }
+      });
+      processQueue();
+    }, 500);
+  });
+})();
+</script>
+</body>
+</html>
