@@ -44,6 +44,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/comics/{comic}/approve', [ComicController::class, 'approve'])->name('comics.approve');
         Route::post('/comics/bulk-approve', [ComicController::class, 'bulkApprove'])->name('comics.bulk-approve');
         Route::post('/comics/approve-all-pending', [ComicController::class, 'approveAllPending'])->name('comics.approve-all-pending');
+        Route::get('/comics/sync-status', [ComicController::class, 'getSyncStatus'])->name('comics.sync-status');
+        Route::post('/comics/auto-tag-all-pending', [ComicController::class, 'autoTagAllPending'])->name('comics.auto-tag-all-pending');
         Route::post('/comics/{comic}/generate-ai', [ComicController::class, 'generateAiMeta'])->name('comics.generate-ai');
         Route::post('/comics/bulk-generate-ai', [ComicController::class, 'bulkGenerateAiMeta'])->name('comics.bulk-generate-ai');
         Route::post('/comics/{comic}/share', [ComicController::class, 'shareWith'])->name('comics.share');

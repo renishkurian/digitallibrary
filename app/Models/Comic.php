@@ -123,7 +123,11 @@ class Comic extends Model
 
     public function scopeSearch($query, $search)
     {
-        return $query->where('title', 'like', '%' . $search . '%');
+        return $query->where(function ($q) use ($search) {
+            $q->where('title', 'like', '%' . $search . '%')
+                ->orWhere('ai_summary', 'like', '%' . $search . '%')
+                ->orWhereJsonContains('tags', $search);
+        });
     }
 
     public function isReadBy(User $user)

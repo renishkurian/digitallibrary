@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, Head, Link, router } from '@inertiajs/react';
 import ComicLayout from '@/Layouts/ComicLayout';
 import Pagination from '@/Components/Pagination';
@@ -10,6 +10,31 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
     const [shareUserId, setShareUserId]   = useState('');
     const [selectedIds, setSelectedIds]   = useState([]);
     const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, confirmText: 'Confirm', confirmStyle: 'danger' });
+    const [syncStatus, setSyncStatus] = useState({ status: 'idle', progress: '', error: null, last_sync_at: null });
+
+    // Poll for sync status if running
+    useEffect(() => {
+        let interval;
+        const checkStatus = () => {
+            fetch(route('admin.comics.sync-status'))
+                .then(res => res.json())
+                .then(data => {
+                    setSyncStatus(data);
+                    if (data.status !== 'running') {
+                        clearInterval(interval);
+                    }
+                });
+        };
+
+        if (syncStatus.status === 'running') {
+            interval = setInterval(checkStatus, 3000);
+        } else {
+            // Check once on load
+            checkStatus();
+        }
+
+        return () => clearInterval(interval);
+    }, [syncStatus.status]);
 
     const requestConfirm = (options) => setConfirmConfig({ ...options, isOpen: true });
     const closeConfirm = () => setConfirmConfig(prev => ({ ...prev, isOpen: false }));
@@ -32,7 +57,11 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
         postUpload(route('admin.comics.upload'), { onSuccess: () => resetUpload('comic') });
     };
 
-    const runSync = () => syncPost(route('admin.comics.sync'));
+    const runSync = () => {
+        syncPost(route('admin.comics.sync'), {
+            onSuccess: () => setSyncStatus(prev => ({ ...prev, status: 'running' }))
+        });
+    };
 
     const handleEdit = (comic) => {
         setEditingComic(comic);
@@ -155,6 +184,20 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
         });
     };
 
+    const autoTagAllPending = () => {
+        requestConfirm({
+            title: 'Auto-Tag All Pending',
+            message: 'Are you sure you want to queue AI tagging for ALL comics that missing metadata? This might take a while.',
+            confirmText: 'Queue All',
+            confirmStyle: 'primary',
+            onConfirm: () => {
+                router.post(route('admin.comics.auto-tag-all-pending'), {}, {
+                    preserveScroll: true,
+                });
+            }
+        });
+    };
+
     const TABS = [
         { key: 'all',    label: 'All Comics' },
         { key: 'public', label: 'Public' },
@@ -244,9 +287,36 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                     <div className="bg-[#16161f] border border-white/7 rounded-2xl p-6 flex flex-col justify-center">
                         <h3 className="text-lg font-['Bebas_Neue'] tracking-widest text-white mb-2">Library Sync</h3>
                         <p className="text-sm text-[#8888a0] mb-4">Scan the system folder for new PDFs and import them.</p>
-                        <button onClick={runSync} disabled={syncProcessing} className="bg-white/5 border border-white/7 text-white px-6 py-2 rounded-lg font-medium disabled:opacity-50 transition-colors hover:bg-white/10 w-max">
-                            {syncProcessing ? 'Syncing...' : 'Sync Now'}
-                        </button>
+                        
+                        <div className="flex flex-col gap-3">
+                            <button 
+                                onClick={runSync} 
+                                disabled={syncProcessing || syncStatus.status === 'running'} 
+                                className="bg-white/5 border border-white/7 text-white px-6 py-2 rounded-lg font-medium disabled:opacity-50 transition-colors hover:bg-white/10 w-max"
+                            >
+                                {syncStatus.status === 'running' ? 'Sync in Progress...' : 'Sync Now'}
+                            </button>
+
+                            {syncStatus.status === 'running' && (
+                                <div className="animate-pulse">
+                                    <p className="text-xs text-blue-400 font-bold uppercase tracking-widest">
+                                        {syncStatus.progress || 'Starting sync...'}
+                                    </p>
+                                </div>
+                            )}
+
+                            {syncStatus.status === 'idle' && syncStatus.last_sync_at && (
+                                <p className="text-[10px] text-[#66667f] uppercase tracking-tighter">
+                                    Last sync: {new Date(syncStatus.last_sync_at).toLocaleString()}
+                                </p>
+                            )}
+
+                            {syncStatus.status === 'error' && (
+                                <p className="text-xs text-[#e8003d] font-bold">
+                                    Error: {syncStatus.error}
+                                </p>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -274,6 +344,13 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                             className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-5 py-2 rounded-lg text-[11px] font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-all"
                         >
                             ✅ Approve All Pending
+                        </button>
+
+                        <button 
+                            onClick={autoTagAllPending}
+                            className="bg-purple-500/10 border border-purple-500/20 text-purple-400 px-5 py-2 rounded-lg text-[11px] font-black uppercase tracking-widest hover:bg-purple-500/20 transition-all"
+                        >
+                            ✨ Auto-Tag All Pending
                         </button>
 
                     {selectedIds.length > 0 && (

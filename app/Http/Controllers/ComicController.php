@@ -390,8 +390,22 @@ class ComicController extends Controller
 
     public function sync()
     {
-        \Illuminate\Support\Facades\Artisan::call('app:sync-comics');
-        return back()->with('success', 'Sync completed.');
+        if (\App\Models\Setting::get('sync_status') === 'running') {
+            return back()->with('error', 'Sync is already in progress.');
+        }
+
+        \App\Jobs\SyncComicsJob::dispatch();
+        return back()->with('success', 'Sync started in the background.');
+    }
+
+    public function getSyncStatus()
+    {
+        return response()->json([
+            'status' => \App\Models\Setting::get('sync_status', 'idle'),
+            'progress' => \App\Models\Setting::get('sync_progress', ''),
+            'error' => \App\Models\Setting::get('sync_error'),
+            'last_sync_at' => \App\Models\Setting::get('last_sync_at'),
+        ]);
     }
 
     public function shareWith(Request $request, Comic $comic)
@@ -449,12 +463,25 @@ class ComicController extends Controller
     public function generateAiMeta(Comic $comic)
     {
         if (\App\Models\Setting::get('ai_enabled') != '1') {
-            return back()->with('error', 'AI features are not enabled in settings.');
+            return back()->with('error', 'AI is disabled.');
         }
 
         \App\Jobs\ProcessComicAIJob::dispatch($comic, Auth::id());
+        return back()->with('success', 'AI generation queued for ' . $comic->title);
+    }
 
-        return back()->with('success', 'AI auto-tagging process started for ' . $comic->title . '.');
+    public function autoTagAllPending()
+    {
+        if (\App\Models\Setting::get('ai_enabled') != '1') {
+            return back()->with('error', 'AI is disabled.');
+        }
+
+        $comics = Comic::whereNull('ai_summary')->get();
+        foreach ($comics as $comic) {
+            \App\Jobs\ProcessComicAIJob::dispatch($comic, Auth::id());
+        }
+
+        return back()->with('success', count($comics) . ' comics queued for AI tagging.');
     }
 
     public function bulkGenerateAiMeta(Request $request)
