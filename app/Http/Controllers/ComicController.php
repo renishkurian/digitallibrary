@@ -108,6 +108,7 @@ class ComicController extends Controller
                     'is_personal' => (bool) $comic->is_personal,
                     'user_id' => $comic->user_id,
                     'readers_count' => $comic->readers_count,
+                    'share_url' => $comic->share_url,
                 ];
             });
 
@@ -261,6 +262,7 @@ class ComicController extends Controller
             'readers_count' => $comic->readers_count,
             'shared_with'   => $comic->sharedWith->map(fn($u) => ['id' => $u->id, 'name' => $u->name, 'email' => $u->email]),
             'shared_roles'  => $comic->sharedRoles->map(fn($r) => ['id' => $r->id, 'name' => $r->name]),
+            'share_url'     => $comic->share_url,
         ]);
 
         return Inertia::render('Admin/Comics/Index', [

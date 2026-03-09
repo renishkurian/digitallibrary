@@ -1,4 +1,5 @@
 import { Link } from '@inertiajs/react';
+import { toast } from 'react-hot-toast';
 
 export default function ComicCard({ comic, auth }) {
     return (
@@ -41,67 +42,70 @@ export default function ComicCard({ comic, auth }) {
                 </div>
             </Link>
 
-            {auth?.user && (
-                <div className="card-actions absolute top-[10px] right-[10px] z-[5] flex gap-[5px] opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                    <Link 
-                        href={route('comics.toggle-read', comic.id)} 
-                        method="post" 
-                        as="button" 
-                        preserveScroll
-                        className={`action-btn w-[30px] h-[30px] rounded-full flex items-center justify-center border border-white/10 backdrop-blur-md cursor-pointer transition-colors ${
-                            comic.is_read ? 'text-[#00ff88] bg-[#00ff88]/20' : 'text-white bg-black/50 hover:bg-[#e8003d]'
-                        }`}
-                        title="Toggle Read Status"
-                    >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                    </Link>
-                    
-                    <button 
-                        onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            navigator.clipboard.writeText(comic.share_url);
-                            alert('Share link copied!');
-                        }}
-                        className="action-btn w-[30px] h-[30px] rounded-full flex items-center justify-center border border-white/10 bg-black/50 backdrop-blur-md text-white cursor-pointer transition-colors hover:bg-blue-500"
-                        title="Copy Share Link"
-                    >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
-                            <polyline points="16 6 12 2 8 6"></polyline>
-                            <line x1="12" y1="2" x2="12" y2="15"></line>
-                        </svg>
-                    </button>
+            <div className="card-actions absolute top-[10px] right-[10px] z-[5] flex gap-[5px] opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                {/* Share button - visible to everyone */}
+                <button 
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(comic.share_url);
+                        toast.success('Share link copied!');
+                    }}
+                    className="action-btn w-[30px] h-[30px] rounded-full flex items-center justify-center border border-white/10 bg-black/50 backdrop-blur-md text-white cursor-pointer transition-colors hover:bg-blue-500 shadow-lg"
+                    title="Copy Share Link"
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                        <polyline points="16 6 12 2 8 6"></polyline>
+                        <line x1="12" y1="2" x2="12" y2="15"></line>
+                    </svg>
+                </button>
 
-                    {auth?.user?.is_admin && (
+                {auth?.user && (
+                    <>
                         <Link 
-                            href={route('admin.comics.toggle-visibility', comic.id)} 
+                            href={route('comics.toggle-read', comic.id)} 
                             method="post" 
                             as="button" 
                             preserveScroll
-                            className="action-btn w-[30px] h-[30px] rounded-full flex items-center justify-center border border-white/10 bg-black/50 backdrop-blur-md text-white cursor-pointer transition-colors hover:bg-[#e8003d]"
-                            title="Toggle Visibility"
+                            className={`action-btn w-[30px] h-[30px] rounded-full flex items-center justify-center border border-white/10 backdrop-blur-md cursor-pointer transition-colors shadow-lg ${
+                                comic.is_read ? 'text-[#00ff88] bg-[#00ff88]/20' : 'text-white bg-black/50 hover:bg-[#e8003d]'
+                            }`}
+                            title="Toggle Read Status"
                         >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                {comic.is_hidden ? (
-                                    <>
-                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                        <circle cx="12" cy="12" r="3"></circle>
-                                        <line x1="1" y1="1" x2="23" y2="23"></line>
-                                    </>
-                                ) : (
-                                    <>
-                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                        <circle cx="12" cy="12" r="3"></circle>
-                                    </>
-                                )}
+                                <polyline points="20 6 9 17 4 12"></polyline>
                             </svg>
                         </Link>
-                    )}
-                </div>
-            )}
+                        
+                        {auth.user.is_admin && (
+                            <Link 
+                                href={route('admin.comics.toggle-visibility', comic.id)} 
+                                method="post" 
+                                as="button" 
+                                preserveScroll
+                                className="action-btn w-[30px] h-[30px] rounded-full flex items-center justify-center border border-white/10 bg-black/50 backdrop-blur-md text-white cursor-pointer transition-colors hover:bg-[#e8003d] shadow-lg"
+                                title="Toggle Visibility"
+                            >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    {comic.is_hidden ? (
+                                        <>
+                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                            <circle cx="12" cy="12" r="3"></circle>
+                                            <line x1="1" y1="1" x2="23" y2="23"></line>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                            <circle cx="12" cy="12" r="3"></circle>
+                                        </>
+                                    )}
+                                </svg>
+                            </Link>
+                        )}
+                    </>
+                )}
+            </div>
         </div>
     );
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Head, Link } from '@inertiajs/react';
 import axios from 'axios';
+import { toast } from 'react-hot-toast';
 import * as pdfjsLib from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
@@ -217,7 +218,7 @@ export default function Show({ comic, last_read_page }) {
                     <button 
                         onClick={() => {
                             navigator.clipboard.writeText(comic.share_url);
-                            alert('Share link copied!');
+                            toast.success('Share link copied!');
                         }}
                         className="cv-nav-btn px-3 bg-blue-500/20 border border-blue-500/30 rounded-lg text-blue-400 text-[11px] font-bold uppercase tracking-widest cursor-pointer transition-colors hover:bg-blue-500/30"
                     >

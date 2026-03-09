@@ -37,6 +37,7 @@ class ShelfController extends Controller
                 'thumbnail' => $comic->thumbnail,
                 'is_read' => Auth::check() ? $comic->isReadBy(Auth::user()) : false,
                 'readers_count' => $comic->readers_count,
+                'share_url' => $comic->share_url,
             ]);
 
         return Inertia::render('Shelves/Show', [
