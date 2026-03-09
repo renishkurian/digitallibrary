@@ -56,6 +56,7 @@ export default function Dashboard({ auth, stats, recentComics }) {
                         { href: route('admin.comics.index'), icon: '📚', title: 'Manage Comics', desc: 'Upload, edit, hide/show, and share comics' },
                         { href: route('admin.users.index'), icon: '👥', title: 'Manage Users', desc: 'Assign roles, edit profiles, delete accounts' },
                         { href: route('admin.shelves.index'), icon: '🗂️', title: 'Manage Shelves', desc: 'Organize comics into collections' },
+                        { href: route('admin.roles.index'), icon: '🔑', title: 'Roles & Permissions', desc: 'Define access levels and security' },
                     ].map(action => (
                         <a key={action.href} href={action.href}
                             className="group bg-[#16161f] border border-white/7 rounded-2xl p-6 hover:border-[#e8003d]/30 hover:bg-[#1a0a0f] transition-all">

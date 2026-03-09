@@ -23,7 +23,7 @@ export default function ComicCard({ comic, auth }) {
                     </p>
                 </div>
                     <div className="card-meta flex justify-between items-center">
-                        {auth.user && (
+                        {auth?.user && (
                             comic.is_read ? (
                                 <span className="read-status px-2 py-0.5 rounded text-[10px] uppercase tracking-tighter bg-[#00ff88]/20 text-[#00ff88]">READ</span>
                             ) : (
@@ -41,7 +41,7 @@ export default function ComicCard({ comic, auth }) {
                 </div>
             </Link>
 
-            {auth.user && (
+            {auth?.user && (
                 <div className="card-actions absolute top-[10px] right-[10px] z-[5] flex gap-[5px] opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                     <Link 
                         href={route('comics.toggle-read', comic.id)} 
@@ -58,7 +58,7 @@ export default function ComicCard({ comic, auth }) {
                         </svg>
                     </Link>
                     
-                    {auth.user.is_admin && (
+                    {auth?.user?.is_admin && (
                         <Link 
                             href={route('admin.comics.toggle-visibility', comic.id)} 
                             method="post" 

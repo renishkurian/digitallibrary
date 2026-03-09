@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Spatie\Permission\Models\Role;
 
@@ -60,7 +61,9 @@ class UserController extends Controller
 
     public function destroy(User $user)
     {
-        if ($user->id === auth()->id()) {
+        /** @var \App\Models\User|null $currentUser */
+        $currentUser = Auth::user();
+        if ($user->id === ($currentUser ? $currentUser->id : null)) {
             return back()->with('error', 'You cannot delete yourself.');
         }
 
@@ -72,7 +75,7 @@ class UserController extends Controller
     public function readingStats()
     {
         /** @var \App\Models\User $user */
-        $user = auth()->user();
+        $user = Auth::user();
 
         // Total time per comic
         $comicStats = $user->readComics()

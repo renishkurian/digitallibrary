@@ -30,7 +30,7 @@ class ComicController extends Controller
             $query->search($request->q);
         }
 
-        // Read/Unread/History Filters (only for logged in users)
+        // Read/Unread/History/Status Filters (only for logged in users)
         if (Auth::check() && $request->filled('status')) {
             $userId = Auth::id();
             if ($request->status === 'read' || $request->status === 'history') {
@@ -47,6 +47,17 @@ class ComicController extends Controller
             } elseif ($request->status === 'unread') {
                 $query->whereDoesntHave('readers', function ($q) use ($userId) {
                     $q->where('user_id', $userId);
+                });
+            } elseif ($request->status === 'currently_reading') {
+                $query->whereHas('readers', function ($q) use ($userId) {
+                    $q->where('user_id', $userId)
+                        ->where('last_read_page', '>', 1)
+                        ->whereColumn('last_read_page', '<', 'comics.pages_count');
+                });
+            } elseif ($request->status === 'completed') {
+                $query->whereHas('readers', function ($q) use ($userId) {
+                    $q->where('user_id', $userId)
+                        ->whereColumn('last_read_page', '>=', 'comics.pages_count');
                 });
             }
         }
@@ -86,20 +97,25 @@ class ComicController extends Controller
 
         $comics = $query->paginate(30)
             ->withQueryString()
-            ->through(fn($comic) => [
-                'id' => $comic->id,
-                'title' => $comic->title,
-                'thumbnail' => $comic->thumbnail,
-                'is_read' => Auth::check() ? $comic->isReadBy(Auth::user()) : false,
-                'is_hidden' => (bool) $comic->is_hidden,
-                'is_personal' => (bool) $comic->is_personal,
-                'user_id' => $comic->user_id,
-                'readers_count' => $comic->readers_count,
-            ]);
+            ->through(function ($comic) {
+                /** @var \App\Models\Comic $comic */
+                return [
+                    'id' => $comic->id,
+                    'title' => $comic->title,
+                    'thumbnail' => $comic->thumbnail,
+                    'is_read' => Auth::check() ? $comic->isReadBy(Auth::user()) : false,
+                    'is_hidden' => (bool) $comic->is_hidden,
+                    'is_personal' => (bool) $comic->is_personal,
+                    'user_id' => $comic->user_id,
+                    'readers_count' => $comic->readers_count,
+                ];
+            });
 
         $recentlyRead = [];
         if (Auth::check() && !$request->filled('status') && !$request->filled('shelf') && !$request->filled('category') && !$request->filled('q')) {
-            $recentlyRead = Auth::user()->readComics()
+            /** @var \App\Models\User $currentUser */
+            $currentUser = Auth::user();
+            $recentlyRead = $currentUser->readComics()
                 ->latest('comic_user.updated_at')
                 ->take(6)
                 ->get()
@@ -115,8 +131,8 @@ class ComicController extends Controller
             'comics' => $comics,
             'recentlyRead' => $recentlyRead,
             'filters' => $request->only(['q', 'status', 'shelf', 'category', 'personal', 'shared', 'hidden']),
-            'shelves' => Shelf::visible()->orderBy('sort_order')->get(),
-            'categories' => Category::whereNull('parent_id')->with('children')->orderBy('sort_order')->get(),
+            'shelves' => Shelf::visible(Auth::user())->orderBy('sort_order')->get(),
+            'categories' => Category::visible(Auth::user())->whereNull('parent_id')->with('children')->orderBy('sort_order')->get(),
         ]);
     }
 
@@ -217,6 +233,11 @@ class ComicController extends Controller
     {
         $query = Comic::with('shelf', 'categories', 'sharedWith', 'uploader')->withCount('readers')->latest();
 
+        // Approval filter
+        if ($request->get('approval') === 'pending') {
+            $query->where('is_approved', false)->where('is_personal', false);
+        }
+
         // Visibility filter
         $visibility = $request->get('visibility', 'all');
         if ($visibility === 'public') {
@@ -231,6 +252,7 @@ class ComicController extends Controller
             'path'          => $comic->path,
             'is_hidden'     => (bool) $comic->is_hidden,
             'is_personal'   => (bool) $comic->is_personal,
+            'is_approved'   => (bool) $comic->is_approved,
             'user_id'       => $comic->user_id,
             'uploader'      => $comic->uploader ? ['name' => $comic->uploader->name] : null,
             'shelf_id'      => $comic->shelf_id,
@@ -238,6 +260,7 @@ class ComicController extends Controller
             'categories'    => $comic->categories,
             'readers_count' => $comic->readers_count,
             'shared_with'   => $comic->sharedWith->map(fn($u) => ['id' => $u->id, 'name' => $u->name, 'email' => $u->email]),
+            'shared_roles'  => $comic->sharedRoles->map(fn($r) => ['id' => $r->id, 'name' => $r->name]),
         ]);
 
         return Inertia::render('Admin/Comics/Index', [
@@ -245,7 +268,11 @@ class ComicController extends Controller
             'shelves'    => Shelf::orderBy('sort_order')->get(),
             'categories' => Category::orderBy('sort_order')->get(),
             'users'      => User::orderBy('name')->get(['id', 'name', 'email']),
-            'filters'    => ['visibility' => $visibility],
+            'roles'      => \Spatie\Permission\Models\Role::orderBy('name')->get(['id', 'name']),
+            'filters'    => [
+                'visibility' => $visibility,
+                'approval' => $request->get('approval', 'all')
+            ],
         ]);
     }
 
@@ -258,6 +285,7 @@ class ComicController extends Controller
             'category_ids.*' => 'exists:categories,id',
             'is_hidden' => 'required|boolean',
             'is_personal' => 'required|boolean',
+            'is_approved' => 'required|boolean',
             'thumbnail' => 'nullable|image|max:2048',
         ]);
 
@@ -266,6 +294,7 @@ class ComicController extends Controller
             'shelf_id' => $request->shelf_id,
             'is_hidden' => $request->is_hidden,
             'is_personal' => $request->is_personal,
+            'is_approved' => $request->is_approved,
         ];
 
         if ($request->hasFile('thumbnail')) {
@@ -305,12 +334,15 @@ class ComicController extends Controller
         $path = $file->move($baseDir, $filename);
         $relativePath = str_replace($baseDir . '/', '', $path->getRealPath());
 
+        /** @var \App\Models\User $currentUser */
+        $currentUser = Auth::user();
         $data = [
             'title' => pathinfo($filename, PATHINFO_FILENAME),
             'filename' => $filename,
             'path' => $relativePath,
             'user_id' => Auth::id(),
             'is_personal' => $request->boolean('is_personal'),
+            'is_approved' => $currentUser->hasRole('admin') || $request->boolean('is_personal'),
         ];
 
         if ($request->hasFile('thumbnail')) {
@@ -362,11 +394,43 @@ class ComicController extends Controller
         return back()->with('success', 'Access revoked.');
     }
 
+    public function shareWithRole(Request $request, Comic $comic)
+    {
+        $request->validate(['role_id' => 'required|exists:roles,id']);
+        $comic->sharedRoles()->syncWithoutDetaching([$request->role_id]);
+        return back()->with('success', 'Comic shared with role successfully.');
+    }
+
+    public function revokeRoleShare(Comic $comic, $roleId)
+    {
+        $comic->sharedRoles()->detach($roleId);
+        return back()->with('success', 'Role access revoked.');
+    }
+
+    public function approve(Comic $comic)
+    {
+        $comic->update(['is_approved' => true]);
+        return back()->with('success', 'Comic approved.');
+    }
+
+    public function bulkApprove(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:comics,id',
+        ]);
+
+        Comic::whereIn('id', $request->ids)->update(['is_approved' => true]);
+
+        return back()->with('success', count($request->ids) . ' comics approved.');
+    }
+
     public function syncReadingTime(Request $request, Comic $comic)
     {
         $request->validate([
             'page' => 'nullable|integer|min:1',
             'seconds' => 'required|integer|min:1',
+            'total_pages' => 'nullable|integer|min:1',
         ]);
 
         /** @var \App\Models\User $user */
@@ -396,6 +460,11 @@ class ComicController extends Controller
             ['seconds_spent' => 0]
         );
         $log->increment('seconds_spent', $seconds);
+
+        // 3. Update total pages if not set
+        if ($request->filled('total_pages') && is_null($comic->pages_count)) {
+            $comic->update(['pages_count' => $request->total_pages]);
+        }
 
         return response()->json(['success' => true]);
     }

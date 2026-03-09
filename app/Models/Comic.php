@@ -8,12 +8,15 @@ class Comic extends Model
 {
     protected $fillable = [
         'title',
+        'description',
         'filename',
         'path',
         'thumbnail',
         'is_hidden',
         'is_personal',
-        'shelf_id',
+        'is_common',
+        'is_approved',
+        'pages_count',
         'user_id',
     ];
 
@@ -44,24 +47,54 @@ class Comic extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
-    public function scopeVisible($query)
+    public function user()
     {
-        /** @var \App\Models\User|null $user */
-        $user = auth()->user();
-        $userId = $user?->id;
+        return $this->belongsTo(User::class);
+    }
 
-        return $query->where(function ($q) use ($user, $userId) {
-            // General visibility: Public, non-personal comics
-            $q->where('is_hidden', false)
-                ->where('is_personal', false);
+    public function sharedRoles()
+    {
+        return $this->belongsToMany(\Spatie\Permission\Models\Role::class, 'comic_role_access', 'comic_id', 'role_id')->withTimestamps();
+    }
 
-            if ($userId) {
-                // Own comics (personal or hidden)
-                $q->orWhere('user_id', $userId);
+    public function scopeVisible($query, $user = null)
+    {
+        // 1. If no user, only show public AND approved by admin
+        if (!$user) {
+            return $query->where('is_hidden', false)
+                ->where('is_personal', false)
+                ->where('is_approved', true);
+        }
 
-                // Explicitly shared comics
-                $q->orWhereHas('sharedWith', fn($sq) => $sq->where('user_id', $userId));
-            }
+        // 2. If admin, show all (including hidden and unapproved)
+        if ($user->hasRole('admin')) {
+            return $query;
+        }
+
+        // 3. For regular users:
+        return $query->where(function ($q) use ($user) {
+            $q->where(function ($sq) {
+                // Public AND Approved
+                $sq->where('is_hidden', false)
+                    ->where('is_personal', false)
+                    ->where('is_approved', true);
+            })
+                ->orWhere('user_id', $user->id) // Uploaded by them (even if not approved)
+                ->orWhereHas('sharedWith', function ($sq) use ($user) {
+                    $sq->where('users.id', $user->id); // Explicitly shared with them
+                })
+                ->orWhereHas('sharedRoles', function ($sq) use ($user) {
+                    $sq->whereIn('roles.id', $user->roles->pluck('id')); // Shared with one of their roles
+                })
+                ->orWhereHas('categories', function ($sq) use ($user) {
+                    // Cascading Sharing via Category
+                    $sq->whereHas('sharedUsers', function ($ssq) use ($user) {
+                        $ssq->where('users.id', $user->id);
+                    })
+                        ->orWhereHas('sharedRoles', function ($ssq) use ($user) {
+                            $ssq->whereIn('roles.id', $user->roles->pluck('id'));
+                        });
+                });
         });
     }
 

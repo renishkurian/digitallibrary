@@ -6,6 +6,7 @@ use App\Http\Controllers\ShelfController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\RolePermissionController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -39,8 +40,12 @@ Route::middleware('auth')->group(function () {
         Route::post('/comics/{comic}/visibility', [ComicController::class, 'toggleVisibility'])->name('comics.toggle-visibility');
         Route::post('/comics/upload', [ComicController::class, 'upload'])->name('comics.upload');
         Route::post('/comics/{comic}/regenerate-thumbnail', [ComicController::class, 'regenerateThumbnail'])->name('comics.regenerate-thumbnail');
+        Route::post('/comics/{comic}/approve', [ComicController::class, 'approve'])->name('comics.approve');
+        Route::post('/comics/bulk-approve', [ComicController::class, 'bulkApprove'])->name('comics.bulk-approve');
         Route::post('/comics/{comic}/share', [ComicController::class, 'shareWith'])->name('comics.share');
         Route::delete('/comics/{comic}/share/{user}', [ComicController::class, 'revokeShare'])->name('comics.revoke-share');
+        Route::post('/comics/{comic}/share-role', [ComicController::class, 'shareWithRole'])->name('comics.share-role');
+        Route::delete('/comics/{comic}/share-role/{role}', [ComicController::class, 'revokeRoleShare'])->name('comics.revoke-role-share');
         Route::post('/comics/sync', [ComicController::class, 'sync'])->name('comics.sync');
 
         // User Management
@@ -60,6 +65,15 @@ Route::middleware('auth')->group(function () {
         Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');
         Route::post('/categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
         Route::delete('/categories/{category}', [CategoryController::class, 'destroy'])->name('categories.destroy');
+        Route::post('/categories/{category}/share-user', [CategoryController::class, 'shareWithUser'])->name('categories.share-user');
+        Route::post('/categories/{category}/share-role', [CategoryController::class, 'shareWithRole'])->name('categories.share-role');
+        Route::delete('/categories/{category}/share-user/{user}', [CategoryController::class, 'revokeUserShare'])->name('categories.revoke-user-share');
+        Route::delete('/categories/{category}/share-role/{role}', [CategoryController::class, 'revokeRoleShare'])->name('categories.revoke-role-share');
+        // Role Management
+        Route::get('/roles', [RolePermissionController::class, 'index'])->name('roles.index');
+        Route::post('/roles', [RolePermissionController::class, 'store'])->name('roles.store');
+        Route::put('/roles/{role}', [RolePermissionController::class, 'update'])->name('roles.update');
+        Route::delete('/roles/{role}', [RolePermissionController::class, 'destroy'])->name('roles.destroy');
     });
 });
 

@@ -11,7 +11,7 @@ class ShelfController extends Controller
 {
     public function index()
     {
-        $shelves = Shelf::visible()
+        $shelves = Shelf::visible(Auth::user())
             ->orderBy('sort_order')
             ->get();
 
@@ -47,7 +47,7 @@ class ShelfController extends Controller
 
     public function adminIndex()
     {
-        $shelves = Shelf::orderBy('sort_order')->get();
+        $shelves = Shelf::with('user')->orderBy('sort_order')->get();
 
         return Inertia::render('Admin/Shelves/Index', [
             'shelves' => $shelves,
@@ -60,9 +60,16 @@ class ShelfController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'is_hidden' => 'required|boolean',
+            'is_common' => 'boolean',
         ]);
 
-        Shelf::create($request->all());
+        Shelf::create([
+            'name' => $request->name,
+            'description' => $request->description,
+            'is_hidden' => $request->is_hidden,
+            'is_common' => $request->boolean('is_common', true),
+            'user_id' => Auth::id(),
+        ]);
 
         return back()->with('success', 'Shelf created successfully.');
     }
@@ -73,9 +80,15 @@ class ShelfController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'is_hidden' => 'required|boolean',
+            'is_common' => 'boolean',
         ]);
 
-        $shelf->update($request->all());
+        $shelf->update([
+            'name' => $request->name,
+            'description' => $request->description,
+            'is_hidden' => $request->is_hidden,
+            'is_common' => $request->is_common,
+        ]);
 
         return back()->with('success', 'Shelf updated successfully.');
     }

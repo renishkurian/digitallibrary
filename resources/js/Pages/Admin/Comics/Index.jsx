@@ -3,10 +3,11 @@ import { useForm, Head, Link, router } from '@inertiajs/react';
 import ComicLayout from '@/Layouts/ComicLayout';
 import Pagination from '@/Components/Pagination';
 
-export default function Index({ comics, auth, shelves, categories, users, filters }) {
+export default function Index({ comics, auth, shelves, categories, users, roles, filters }) {
     const [editingComic, setEditingComic] = useState(null);
     const [sharingComic, setSharingComic] = useState(null);
     const [shareUserId, setShareUserId]   = useState('');
+    const [selectedIds, setSelectedIds]   = useState([]);
 
     const { data: uploadData, setData: setUploadData, post: postUpload, processing: uploading, errors: uploadErrors, reset: resetUpload } = useForm({ 
         comic: null, 
@@ -14,7 +15,7 @@ export default function Index({ comics, auth, shelves, categories, users, filter
         thumbnail: null 
     });
     const { data: editData, setData: setEditData, post: postUpdate, processing: updating, errors: editErrors, reset: resetEdit } = useForm({
-        title: '', shelf_id: '', category_ids: [], is_hidden: false, is_personal: false, thumbnail: null
+        title: '', shelf_id: '', category_ids: [], is_hidden: false, is_personal: false, is_approved: false, thumbnail: null
     });
     const { post: syncPost, processing: syncProcessing } = useForm();
 
@@ -35,6 +36,7 @@ export default function Index({ comics, auth, shelves, categories, users, filter
             category_ids: comic.categories.map(c => c.id),
             is_hidden:    comic.is_hidden,
             is_personal:  comic.is_personal,
+            is_approved:  comic.is_approved,
             thumbnail:    null,
         });
     };
@@ -67,12 +69,52 @@ export default function Index({ comics, auth, shelves, categories, users, filter
         router.delete(route('admin.comics.revoke-share', [comic.id, userId]), { preserveScroll: true });
     };
 
-    const setVisibility = (v) => router.get(route('admin.comics.index'), { visibility: v }, { replace: true, preserveScroll: false });
+    const submitRoleShare = (roleId) => {
+        router.post(route('admin.comics.share-role', sharingComic.id), { role_id: roleId }, {
+            preserveScroll: true,
+            onSuccess: () => setSharingComic(prev => ({ 
+                ...prev, 
+                shared_roles: [...(prev.shared_roles || []), roles.find(r => r.id == roleId)]
+            })),
+        });
+    };
+
+    const revokeRoleShare = (comic, roleId) => {
+        router.delete(route('admin.comics.revoke-role-share', [comic.id, roleId]), { preserveScroll: true });
+    };
+
+    const approveComic = (id) => {
+        router.post(route('admin.comics.approve', id), {}, { preserveScroll: true });
+    };
+
+    const handleSelectAll = (e) => {
+        if (e.target.checked) {
+            setSelectedIds(comics.data.map(c => c.id));
+        } else {
+            setSelectedIds([]);
+        }
+    };
+
+    const toggleSelect = (id) => {
+        setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+    };
+
+    const bulkApprove = () => {
+        if (!confirm(`Are you sure you want to approve ${selectedIds.length} comics?`)) return;
+        router.post(route('admin.comics.bulk-approve'), { ids: selectedIds }, {
+            preserveScroll: true,
+            onSuccess: () => setSelectedIds([]),
+        });
+    };
+
+    const setVisibility = (v) => router.get(route('admin.comics.index'), { ...filters, visibility: v, approval: 'all' }, { replace: true, preserveScroll: false });
+    const setApprovalFilter = (a) => router.get(route('admin.comics.index'), { ...filters, approval: a, visibility: 'all' }, { replace: true, preserveScroll: false });
 
     const TABS = [
         { key: 'all',    label: 'All Comics' },
         { key: 'public', label: 'Public' },
         { key: 'hidden', label: 'Hidden' },
+        { key: 'pending', label: 'Pending Approval', filter: 'approval' },
     ];
 
     return (
@@ -150,27 +192,37 @@ export default function Index({ comics, auth, shelves, categories, users, filter
                     </div>
                 </div>
 
-                {/* Visibility Filter Tabs */}
-                <div className="flex items-center gap-1 p-1 bg-[#16161f] border border-white/7 rounded-xl w-fit">
-                    {TABS.map(tab => (
-                        <button
-                            key={tab.key}
-                            onClick={() => setVisibility(tab.key)}
-                            className={`px-5 py-2 rounded-lg text-[12px] uppercase tracking-widest font-black transition-all ${
-                                currentVisibility === tab.key
-                                    ? 'bg-[#e8003d] text-white shadow-lg shadow-[#e8003d]/20'
-                                    : 'text-[#8888a0] hover:text-white hover:bg-white/5'
-                            }`}
-                        >
-                            {tab.label}
-                            {tab.key === 'hidden' && currentVisibility === 'all' && (
-                                <span className="ml-2 text-[10px] bg-white/10 text-white px-1.5 py-0.5 rounded-full font-bold">
-                                    {comics.data.filter(c => c.is_hidden).length}
-                                </span>
-                            )}
-                        </button>
-                    ))}
-                    <span className="ml-3 text-[10px] text-[#55556a] uppercase tracking-[2px] font-bold pr-3 border-l border-white/10 pl-3">{comics.total} total</span>
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div className="flex items-center gap-1 p-1 bg-[#16161f] border border-white/7 rounded-xl w-fit">
+                        {TABS.map(tab => (
+                            <button
+                                key={tab.key}
+                                onClick={() => tab.filter === 'approval' ? setApprovalFilter(tab.key) : setVisibility(tab.key)}
+                                className={`px-5 py-2 rounded-lg text-[12px] uppercase tracking-widest font-black transition-all ${
+                                    (tab.filter === 'approval' ? filters.approval === tab.key : filters.visibility === tab.key) || (tab.key === 'all' && !filters.visibility && !filters.approval)
+                                        ? 'bg-[#e8003d] text-white shadow-lg shadow-[#e8003d]/20'
+                                        : 'text-[#8888a0] hover:text-white hover:bg-white/5'
+                                }`}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {selectedIds.length > 0 && (
+                        <div className="flex items-center gap-4 bg-[#e8003d]/10 border border-[#e8003d]/20 px-4 py-2 rounded-xl animate-in fade-in slide-in-from-top-2">
+                            <span className="text-[11px] font-black text-[#e8003d] uppercase tracking-widest">{selectedIds.length} Selected</span>
+                            <button 
+                                onClick={bulkApprove}
+                                className="bg-[#e8003d] text-white px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-[#ff0044] transition-all shadow-lg shadow-[#e8003d]/20"
+                            >
+                                Bulk Approve
+                            </button>
+                            <button onClick={() => setSelectedIds([])} className="text-[#8888a0] hover:text-white transition-colors">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {/* Comics Table */}
@@ -179,6 +231,14 @@ export default function Index({ comics, auth, shelves, categories, users, filter
                         <table className="min-w-full divide-y divide-white/5" style={{ minWidth: '840px' }}>
                             <thead>
                                 <tr className="border-b border-white/7">
+                                    <th className="px-4 py-4 text-left w-10">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={selectedIds.length === comics.data.length && comics.data.length > 0}
+                                            onChange={handleSelectAll}
+                                            className="w-4 h-4 rounded border-white/20 bg-white/5 text-[#e8003d] focus:ring-[#e8003d] focus:ring-offset-0"
+                                        />
+                                    </th>
                                     {['Comic', 'Shelf', 'Categories', 'Status', 'Shared With', 'Uploaded By', 'Actions'].map(h => (
                                         <th key={h} className={`px-4 py-4 text-left text-[11px] font-black text-[#a0a0b8] uppercase tracking-widest whitespace-nowrap ${h === 'Actions' ? 'text-right' : ''}`}>{h}</th>
                                     ))}
@@ -186,7 +246,15 @@ export default function Index({ comics, auth, shelves, categories, users, filter
                             </thead>
                             <tbody className="divide-y divide-white/5">
                                 {comics.data.map((comic) => (
-                                    <tr key={comic.id} className={`group hover:bg-white/[0.02] transition-colors ${comic.is_hidden ? 'opacity-60' : ''}`}>
+                                    <tr key={comic.id} className={`group hover:bg-white/[0.02] transition-colors ${comic.is_hidden ? 'opacity-60' : ''} ${selectedIds.includes(comic.id) ? 'bg-[#e8003d]/5' : ''}`}>
+                                        <td className="px-4 py-4">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={selectedIds.includes(comic.id)}
+                                                onChange={() => toggleSelect(comic.id)}
+                                                className="w-4 h-4 rounded border-white/20 bg-white/5 text-[#e8003d] focus:ring-[#e8003d] focus:ring-offset-0"
+                                            />
+                                        </td>
                                         <td className="px-4 py-4">
                                             <div className="flex flex-col">
                                                 <span className="text-white font-bold group-hover:text-[#e8003d] transition-colors text-sm flex items-center gap-2">
@@ -214,10 +282,18 @@ export default function Index({ comics, auth, shelves, categories, users, filter
                                             </div>
                                         </td>
                                         <td className="px-4 py-4">
-                                            {comic.is_hidden
-                                                ? <span className="text-[10px] text-[#e8003d] font-bold uppercase tracking-widest flex items-center gap-1">🔒 Hidden</span>
-                                                : <span className="text-[10px] text-green-400 font-bold uppercase tracking-widest">✓ Public</span>
-                                            }
+                                            <div className="flex flex-col gap-1">
+                                                {comic.is_hidden
+                                                    ? <span className="text-[10px] text-[#e8003d] font-bold uppercase tracking-widest flex items-center gap-1">🔒 Hidden</span>
+                                                    : <span className="text-[10px] text-green-400 font-bold uppercase tracking-widest">✓ Public</span>
+                                                }
+                                                {!comic.is_approved && !comic.is_personal && (
+                                                    <span className="text-[9px] bg-yellow-500/10 text-yellow-500 px-1.5 py-0.5 rounded border border-yellow-500/20 uppercase tracking-tighter w-fit">Pending Approval</span>
+                                                )}
+                                                {comic.is_approved && !comic.is_personal && (
+                                                    <span className="text-[9px] text-white/40 uppercase tracking-tighter">Approved</span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-4 py-4">
                                             <div className="flex flex-wrap gap-1 items-center">
@@ -239,6 +315,11 @@ export default function Index({ comics, auth, shelves, categories, users, filter
                                         </td>
                                         <td className="px-4 py-4 text-right">
                                             <div className="flex items-center justify-end gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
+                                                {!comic.is_approved && !comic.is_personal && (
+                                                    <button onClick={() => approveComic(comic.id)} className="p-2 rounded-lg bg-green-500/10 text-green-400 hover:text-white hover:bg-green-500 transition-all" title="Approve Comic">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+                                                    </button>
+                                                )}
                                                 <button onClick={() => openShare(comic)} className="p-2 rounded-lg bg-blue-500/5 text-blue-400/60 hover:text-blue-400 hover:bg-blue-500/10 transition-all" title="Share Access">
                                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
                                                 </button>
@@ -316,6 +397,14 @@ export default function Index({ comics, auth, shelves, categories, users, filter
                                             </div>
                                             <span className="text-[13px] text-[#a0a0b8] group-hover:text-white transition-colors">Personal PDF (Private)</span>
                                         </label>
+
+                                        <label className="flex items-center gap-3 cursor-pointer group">
+                                            <input type="checkbox" checked={editData.is_approved} onChange={e => setEditData('is_approved', e.target.checked)} className="hidden" />
+                                            <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${editData.is_approved ? 'bg-green-500 border-green-500' : 'border-white/20 group-hover:border-white/40'}`}>
+                                                {editData.is_approved && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12" /></svg>}
+                                            </div>
+                                            <span className="text-[13px] text-[#a0a0b8] group-hover:text-white transition-colors">Admin Approved</span>
+                                        </label>
                                     </div>
                                 </div>
                                 <div className="flex flex-col gap-2">
@@ -377,22 +466,65 @@ export default function Index({ comics, auth, shelves, categories, users, filter
                             </div>
                         )}
 
-                        <div className="flex flex-col gap-3">
-                            <label className="text-[11px] uppercase tracking-widest font-bold text-[#8888a0]">Add User</label>
-                            <select value={shareUserId} onChange={e => setShareUserId(e.target.value)} className="bg-[#0c0c12] border border-white/10 text-white rounded-lg p-3 outline-none focus:border-blue-500 transition-colors">
-                                <option value="">Select a user...</option>
-                                {users.filter(u => !sharingComic.shared_with?.find(s => s.id === u.id)).map(u => (
-                                    <option key={u.id} value={u.id} className="bg-[#111118]">{u.name} ({u.email})</option>
-                                ))}
-                            </select>
-                            <div className="flex gap-3 mt-2">
-                                <button onClick={submitShare} disabled={!shareUserId} className="bg-blue-600 text-white px-8 py-2.5 rounded-lg font-bold text-sm uppercase tracking-widest hover:bg-blue-500 transition disabled:opacity-40">
-                                    Grant Access
-                                </button>
-                                <button onClick={() => setSharingComic(null)} className="bg-white/5 text-white px-8 py-2.5 rounded-lg font-bold text-sm uppercase tracking-widest hover:bg-white/10 transition">
-                                    Close
-                                </button>
+                        <div className="flex flex-col gap-6">
+                            <div className="flex flex-col gap-3">
+                                <label className="text-[11px] uppercase tracking-widest font-bold text-[#8888a0]">Shared with Users</label>
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                    {sharingComic.shared_with?.map(u => (
+                                        <span key={u.id} className="flex items-center gap-2 text-[11px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 px-3 py-1 rounded-full">
+                                            {u.name}
+                                            <button onClick={() => revokeShare(sharingComic, u.id)} className="hover:text-white transition-colors">✕</button>
+                                        </span>
+                                    ))}
+                                </div>
+                                <select 
+                                    value={shareUserId} 
+                                    onChange={e => {
+                                        const uid = e.target.value;
+                                        if (uid) {
+                                            router.post(route('admin.comics.share', sharingComic.id), { user_id: uid }, { preserveScroll: true });
+                                            setShareUserId('');
+                                        }
+                                    }} 
+                                    className="bg-[#0c0c12] border border-white/10 text-white rounded-lg p-3 outline-none focus:border-blue-500 transition-colors text-sm"
+                                >
+                                    <option value="">Grant user access...</option>
+                                    {users.filter(u => !sharingComic.shared_with?.find(s => s.id === u.id)).map(u => (
+                                        <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+                                    ))}
+                                </select>
                             </div>
+
+                            <div className="flex flex-col gap-3">
+                                <label className="text-[11px] uppercase tracking-widest font-bold text-[#8888a0]">Shared with Roles</label>
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                    {sharingComic.shared_roles?.map(r => (
+                                        <span key={r.id} className="flex items-center gap-2 text-[11px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20 px-3 py-1 rounded-full">
+                                            {r.name}
+                                            <button onClick={() => revokeRoleShare(sharingComic, r.id)} className="hover:text-white transition-colors">✕</button>
+                                        </span>
+                                    ))}
+                                </div>
+                                <select 
+                                    onChange={e => {
+                                        const rid = e.target.value;
+                                        if (rid) {
+                                            submitRoleShare(rid);
+                                            e.target.value = '';
+                                        }
+                                    }} 
+                                    className="bg-[#0c0c12] border border-white/10 text-white rounded-lg p-3 outline-none focus:border-purple-500 transition-colors text-sm"
+                                >
+                                    <option value="">Grant role access...</option>
+                                    {roles.filter(r => !sharingComic.shared_roles?.find(s => s.id === r.id)).map(r => (
+                                        <option key={r.id} value={r.id}>{r.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <button onClick={() => setSharingComic(null)} className="w-full bg-white/5 text-white py-3 rounded-lg font-bold text-sm uppercase tracking-widest hover:bg-white/10 transition mt-2">
+                                Close
+                            </button>
                         </div>
                     </div>
                 </div>

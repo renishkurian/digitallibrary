@@ -9,6 +9,7 @@ export default function Index({ shelves }) {
         name: '',
         description: '',
         is_hidden: false,
+        is_common: true,
     });
 
     const handleSubmit = (e) => {
@@ -33,6 +34,7 @@ export default function Index({ shelves }) {
             name: shelf.name,
             description: shelf.description || '',
             is_hidden: shelf.is_hidden,
+            is_common: shelf.is_common,
         });
     };
 
@@ -66,15 +68,30 @@ export default function Index({ shelves }) {
                         </div>
 
                         <div className="flex flex-col gap-2">
-                            <label className="text-[11px] tracking-widest uppercase font-bold text-[#8888a0]">Visibility</label>
-                            <select 
-                                value={data.is_hidden ? '1' : '0'}
-                                onChange={e => setData('is_hidden', e.target.value === '1')}
-                                className="bg-[#0c0c12] border border-white/10 text-white rounded-lg p-3 outline-none focus:border-[#e8003d] transition-colors"
-                            >
-                                <option value="0">Public</option>
-                                <option value="1">Hidden (Admin Only)</option>
-                            </select>
+                            <label className="text-[11px] tracking-widest uppercase font-bold text-[#8888a0]">Visibility & Ownership</label>
+                            <div className="flex flex-col gap-4 mt-1">
+                                <select 
+                                    value={data.is_hidden ? '1' : '0'}
+                                    onChange={e => setData('is_hidden', e.target.value === '1')}
+                                    className="bg-[#0c0c12] border border-white/10 text-white rounded-lg p-3 outline-none focus:border-[#e8003d] transition-colors text-sm"
+                                >
+                                    <option value="0">Public / Shared</option>
+                                    <option value="1">Hidden (Admin Only)</option>
+                                </select>
+                                
+                                <label className="flex items-center gap-3 cursor-pointer group">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={data.is_common}
+                                        onChange={e => setData('is_common', e.target.checked)}
+                                        className="hidden" 
+                                    />
+                                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${data.is_common ? 'bg-[#e8003d] border-[#e8003d]' : 'border-white/20 group-hover:border-white/40'}`}>
+                                        {data.is_common && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12" /></svg>}
+                                    </div>
+                                    <span className="text-[11px] text-[#a0a0b8] group-hover:text-white transition-colors font-bold uppercase tracking-widest">Common Shelf (Visible to All)</span>
+                                </label>
+                            </div>
                         </div>
 
                         <div className="md:col-span-2 flex flex-col gap-2">
@@ -116,7 +133,7 @@ export default function Index({ shelves }) {
                             <thead>
                                 <tr className="border-b border-white/7">
                                     <th className="py-4 text-[11px] tracking-widest uppercase text-[#55556a]">Name</th>
-                                    <th className="py-4 text-[11px] tracking-widest uppercase text-[#55556a]">Description</th>
+                                    <th className="py-4 text-[11px] tracking-widest uppercase text-[#55556a]">Ownership</th>
                                     <th className="py-4 text-[11px] tracking-widest uppercase text-[#55556a]">Status</th>
                                     <th className="py-4 text-[11px] tracking-widest uppercase text-[#55556a] text-right">Actions</th>
                                 </tr>
@@ -124,14 +141,29 @@ export default function Index({ shelves }) {
                             <tbody>
                                 {shelves.map(shelf => (
                                     <tr key={shelf.id} className="border-b border-white/5 group">
-                                        <td className="py-4 font-bold text-white group-hover:text-[#e8003d] transition-colors">{shelf.name}</td>
-                                        <td className="py-4 text-[#8888a0] text-sm max-w-xs truncate">{shelf.description || '-'}</td>
+                                        <td className="py-4 font-bold text-white group-hover:text-[#e8003d] transition-colors">
+                                            <div className="flex flex-col">
+                                                <span>{shelf.name}</span>
+                                                <span className="text-[10px] text-[#55556a] font-normal normal-case mt-0.5 line-clamp-1">{shelf.description || 'No description'}</span>
+                                            </div>
+                                        </td>
                                         <td className="py-4">
-                                            {shelf.is_hidden ? (
-                                                <span className="bg-white/5 text-[#8888a0] px-2.5 py-1 rounded-md text-[10px] uppercase tracking-wider border border-white/5">Hidden</span>
-                                            ) : (
-                                                <span className="bg-[#e8003d]/10 text-[#e8003d] px-2.5 py-1 rounded-md text-[10px] uppercase tracking-wider border border-[#e8003d]/20">Public</span>
-                                            )}
+                                            <div className="flex flex-col gap-1">
+                                                {shelf.is_common 
+                                                    ? <span className="text-[10px] text-green-400 font-bold uppercase tracking-widest">🌍 Common</span>
+                                                    : <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">👤 Personal</span>
+                                                }
+                                                <span className="text-[9px] text-[#55556a] uppercase">By {shelf.user?.name || 'System'}</span>
+                                            </div>
+                                        </td>
+                                        <td className="py-4">
+                                            <div className="flex flex-col gap-1">
+                                                {shelf.is_hidden ? (
+                                                    <span className="text-[10px] text-[#e8003d] font-bold uppercase tracking-widest">🔒 Hidden</span>
+                                                ) : (
+                                                    <span className="text-[10px] text-green-400 font-bold uppercase tracking-widest">✓ Public</span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="py-4 text-right flex items-center justify-end gap-3">
                                             <button 

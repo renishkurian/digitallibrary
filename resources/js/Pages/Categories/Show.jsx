@@ -3,9 +3,9 @@ import ComicLayout from '@/Layouts/ComicLayout';
 import ComicCard from '@/Components/ComicCard';
 import Pagination from '@/Components/Pagination';
 
-export default function Show({ category, comics, breadcrumbs }) {
+export default function Show({ category, comics, breadcrumbs, auth }) {
     return (
-        <ComicLayout title={category.name}>
+        <ComicLayout auth={auth} title={category.name}>
             <Head title={`${category.name} - Category`} />
             
             <div className="flex flex-col gap-8">
@@ -45,7 +45,7 @@ export default function Show({ category, comics, breadcrumbs }) {
                         <>
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 gap-5">
                                 {comics.data.map((comic) => (
-                                    <ComicCard key={comic.id} comic={comic} />
+                                    <ComicCard key={comic.id} comic={comic} auth={auth} />
                                 ))}
                             </div>
                             <div className="mt-10">

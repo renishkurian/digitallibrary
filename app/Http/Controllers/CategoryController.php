@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Category;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Auth;
+use Spatie\Permission\Models\Role;
 
 class CategoryController extends Controller
 {
@@ -33,12 +35,19 @@ class CategoryController extends Controller
 
     public function adminIndex()
     {
-        $categories = Category::with('parent')->orderBy('parent_id')->orderBy('sort_order')->get();
+        $categories = Category::with(['parent', 'sharedUsers', 'sharedRoles', 'user'])
+            ->orderBy('parent_id')
+            ->orderBy('sort_order')
+            ->get();
         $parentCategories = Category::whereNull('parent_id')->get();
+        $users = User::orderBy('name')->get(['id', 'name', 'email']);
+        $roles = Role::orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('Admin/Categories/Index', [
             'categories' => $categories,
             'parentCategories' => $parentCategories,
+            'users' => $users,
+            'roles' => $roles,
         ]);
     }
 
@@ -48,9 +57,16 @@ class CategoryController extends Controller
             'name' => 'required|string|max:255',
             'parent_id' => 'nullable|exists:categories,id',
             'description' => 'nullable|string',
+            'is_common' => 'boolean',
         ]);
 
-        Category::create($request->all());
+        Category::create([
+            'name' => $request->name,
+            'parent_id' => $request->parent_id,
+            'description' => $request->description,
+            'is_common' => $request->boolean('is_common', true),
+            'user_id' => Auth::id(),
+        ]);
 
         return back()->with('success', 'Category created successfully.');
     }
@@ -61,11 +77,43 @@ class CategoryController extends Controller
             'name' => 'required|string|max:255',
             'parent_id' => 'nullable|exists:categories,id',
             'description' => 'nullable|string',
+            'is_common' => 'boolean',
         ]);
 
-        $category->update($request->all());
+        $category->update([
+            'name' => $request->name,
+            'parent_id' => $request->parent_id,
+            'description' => $request->description,
+            'is_common' => $request->is_common,
+        ]);
 
         return back()->with('success', 'Category updated successfully.');
+    }
+
+    public function shareWithUser(Request $request, Category $category)
+    {
+        $request->validate(['user_id' => 'required|exists:users,id']);
+        $category->sharedUsers()->syncWithoutDetaching([$request->user_id]);
+        return back()->with('success', 'Category shared with user.');
+    }
+
+    public function shareWithRole(Request $request, Category $category)
+    {
+        $request->validate(['role_id' => 'required|exists:roles,id']);
+        $category->sharedRoles()->syncWithoutDetaching([$request->role_id]);
+        return back()->with('success', 'Category shared with role.');
+    }
+
+    public function revokeUserShare(Category $category, User $user)
+    {
+        $category->sharedUsers()->detach($user->id);
+        return back()->with('success', 'User access revoked.');
+    }
+
+    public function revokeRoleShare(Category $category, $roleId)
+    {
+        $category->sharedRoles()->detach($roleId);
+        return back()->with('success', 'Role access revoked.');
     }
 
     public function destroy(Category $category)

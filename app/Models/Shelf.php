@@ -8,19 +8,34 @@ class Shelf extends Model
 {
     protected $fillable = [
         'name',
+        'slug',
+        'parent_id',
         'description',
-        'cover_image',
         'sort_order',
-        'is_hidden',
+        'is_common',
+        'user_id',
     ];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 
     public function comics()
     {
         return $this->hasMany(Comic::class);
     }
 
-    public function scopeVisible($query)
+    public function scopeVisible($query, $user = null)
     {
-        return $query->where('is_hidden', false);
+        $user = $user ?? auth()->user();
+
+        return $query->where('is_hidden', false)
+            ->where(function ($q) use ($user) {
+                $q->where('is_common', true);
+                if ($user) {
+                    $q->orWhere('user_id', $user->id);
+                }
+            });
     }
 }

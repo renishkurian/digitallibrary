@@ -127,6 +127,18 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
                                     >
                                         READ
                                     </Link>
+                                    <Link 
+                                        href={route('comics.index', { ...filters, status: 'currently_reading' })}
+                                        className={`px-4 py-1.5 rounded-full text-[12px] border transition-all ${filters.status === 'currently_reading' ? 'bg-[#e8003d] text-white border-[#e8003d]' : 'bg-white/5 border-white/7 text-[#8888a0] hover:text-white'}`}
+                                    >
+                                        CURRENTLY READING
+                                    </Link>
+                                    <Link 
+                                        href={route('comics.index', { ...filters, status: 'completed' })}
+                                        className={`px-4 py-1.5 rounded-full text-[12px] border transition-all ${filters.status === 'completed' ? 'bg-[#e8003d] text-white border-[#e8003d]' : 'bg-white/5 border-white/7 text-[#8888a0] hover:text-white'}`}
+                                    >
+                                        COMPLETED
+                                    </Link>
                                 </>
                             )}
                         </div>
