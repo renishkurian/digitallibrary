@@ -371,7 +371,7 @@ class ComicController extends Controller
             }
         }
 
-        if (\App\Models\Setting::get('ai_enabled') == '1') {
+        if (\App\Models\Setting::get('ai_enabled') == '1' && $request->boolean('generate_ai')) {
             \App\Jobs\ProcessComicAIJob::dispatch($comic, Auth::id());
             $thumbnailStatus .= '. AI auto-tagging process started in the background.';
         }
