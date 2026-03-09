@@ -44,7 +44,7 @@ jobs:
 
       - name: Sync files to production directory
         run: |
-          sudo rsync -av --exclude='.git' --exclude='.github' --exclude='node_modules' --exclude='.env' ./ /var/www/html/balarama/
+          sudo rsync -av --exclude='.git' --exclude='.github' --exclude='node_modules' --exclude='.env' --exclude='database/database.sqlite' --exclude='database/database.sqlite-journal' ./ /var/www/html/balarama/
           
           # Exhaustive permission fix for production
           sudo chown -R www-data:www-data /var/www/html/balarama
@@ -62,8 +62,15 @@ jobs:
           
           # SQLite needs write permission on the directory to create journal files
           sudo chmod 777 /var/www/html/balarama/database
+          
+          # Ensure database exists but DO NOT overwrite if it already does
+          if [ ! -f /var/www/html/balarama/database/database.sqlite ]; then
+            sudo touch /var/www/html/balarama/database/database.sqlite
+          fi
+          
           sudo chmod 666 /var/www/html/balarama/database/database.sqlite
-          sudo chown -R www-data:www-data /var/www/html/balarama/database
+          sudo chown www-data:www-data /var/www/html/balarama/database/database.sqlite
+          sudo chown www-data:www-data /var/www/html/balarama/database
           
           # Ensure logs are writable
           sudo touch /var/www/html/balarama/storage/logs/laravel.log
