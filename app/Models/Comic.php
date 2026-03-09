@@ -135,10 +135,9 @@ class Comic extends Model
     {
         $baseDir = rtrim(config('comics.base_dir'), '/');
         $thumbDir = rtrim(config('comics.thumb_dir'), '/');
+        $absolutePdfPath = $baseDir . '/' . ltrim($this->path, '/');
 
-        $pdfPath = escapeshellarg($baseDir . '/' . urldecode(ltrim($this->path, '/')));
-
-        if (!file_exists($baseDir . '/' . urldecode(ltrim($this->path, '/')))) {
+        if (!file_exists($absolutePdfPath)) {
             return false;
         }
 
@@ -146,14 +145,29 @@ class Comic extends Model
             mkdir($thumbDir, 0755, true);
         }
 
-        $md5 = md5($baseDir . '/' . urldecode(ltrim($this->path, '/')));
+        // 1. Try Filename-based thumbnail (highest priority for user symlinks)
+        $filename = pathinfo($absolutePdfPath, PATHINFO_FILENAME);
+        if (file_exists($thumbDir . "/" . $filename . ".png")) {
+            $this->update(['thumbnail' => $filename . ".png"]);
+            return true;
+        }
+
+        // 2. Try MD5-based thumbnail (second priority)
+        $md5 = md5($absolutePdfPath);
+        if (file_exists($thumbDir . "/" . $md5 . ".png")) {
+            $this->update(['thumbnail' => $md5 . ".png"]);
+            return true;
+        }
+
+        // 3. Generate if neither exists
         $tempPrefix = $thumbDir . '/' . $md5;
+        $pdfPathEscaped = escapeshellarg($absolutePdfPath);
+        $tempPrefixEscaped = escapeshellarg($tempPrefix);
 
         // pdftoppm -f 1 -l 1 -png "pdfPath" "tempPrefix"
-        $command = "pdftoppm -f 1 -l 1 -png " . $pdfPath . " " . escapeshellarg($tempPrefix) . " 2>&1";
+        $command = "pdftoppm -f 1 -l 1 -png " . $pdfPathEscaped . " " . $tempPrefixEscaped . " 2>&1";
         exec($command, $output, $returnVar);
 
-        // pdftoppm appends -1.png or -01.png depending on page count length. We can use glob to find it.
         $generatedFiles = glob($tempPrefix . "-*.png");
         $finalFile = $md5 . ".png";
 
@@ -161,7 +175,8 @@ class Comic extends Model
             $generatedFile = $generatedFiles[0];
             rename($generatedFile, $thumbDir . '/' . $finalFile);
             $this->update(['thumbnail' => $finalFile]);
-            // Clean up any other pages if pdftoppm ignored -l 1 somehow
+
+            // Clean up extras
             foreach (glob($tempPrefix . "-*.png") as $extra) {
                 @unlink($extra);
             }

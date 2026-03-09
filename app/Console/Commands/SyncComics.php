@@ -58,7 +58,12 @@ class SyncComics extends Command
                 'filename' => $filename,
             ]);
 
-            // Only generate thumbnail reference if not already set or file missing
+            // 1. If we have a thumbnail in DB, verify it exists. If not, mark as null to re-search.
+            if ($comic->thumbnail && !file_exists($thumbDir . '/' . $comic->thumbnail)) {
+                $comic->thumbnail = null;
+            }
+
+            // 2. Search for existing thumbnail (Name then MD5)
             if (!$comic->thumbnail) {
                 $comic->thumbnail = $this->getThumbnail($absolutePath, $thumbDir, $baseDir);
             }
@@ -76,10 +81,10 @@ class SyncComics extends Command
                 }
             }
 
-            // Still try to generate thumbnail if missing after all checks
+            // 3. Fallback to generation (which now also double-checks Name/MD5)
             if (!$comic->thumbnail) {
                 if ($comic->generateThumbnail()) {
-                    $this->info("Generated missing thumbnail for {$title}");
+                    $this->info("Generated or linked thumbnail for {$title}");
                 }
             }
 
