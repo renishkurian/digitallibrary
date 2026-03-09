@@ -22,16 +22,25 @@ export default function ComicCard({ comic, auth }) {
                         {comic.title}
                         {comic.is_personal && <span className="text-[9px] bg-blue-500/10 text-blue-400 px-1 py-0.5 rounded border border-blue-500/20 uppercase tracking-tighter shrink-0">Personal</span>}
                     </h3>
-                    {comic.tags && comic.tags.length > 0 && (
-                        <div className="flex gap-1 mt-1.5 px-1 overflow-hidden">
-                            {comic.tags.slice(0, 2).map((tag, idx) => (
-                                <span key={idx} className="text-[9px] bg-white/10 text-gray-300 px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                                    {tag}
-                                </span>
-                            ))}
-                            {comic.tags.length > 2 && <span className="text-[9px] text-gray-500 mt-0.5">+{comic.tags.length - 2}</span>}
-                        </div>
-                    )}
+                    {(() => {
+                        let parsedTags = [];
+                        try {
+                            parsedTags = typeof comic.tags === 'string' ? JSON.parse(comic.tags) : (comic.tags || []);
+                        } catch (e) {
+                            parsedTags = [];
+                        }
+                        
+                        return parsedTags.length > 0 && (
+                            <div className="flex gap-1 mt-1.5 px-1 overflow-hidden">
+                                {parsedTags.slice(0, 2).map((tag, idx) => (
+                                    <span key={idx} className="text-[9px] bg-white/10 text-gray-300 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                                        {tag}
+                                    </span>
+                                ))}
+                                {parsedTags.length > 2 && <span className="text-[9px] text-gray-500 mt-0.5">+{parsedTags.length - 2}</span>}
+                            </div>
+                        );
+                    })()}
                     <div className="flex justify-between items-center mt-1 px-1">
                         <p className="text-[#55556a] text-[10px] font-medium tracking-wide uppercase">
                             {comic.readers_count} {comic.readers_count === 1 ? 'Reader' : 'Readers'}
@@ -96,18 +105,27 @@ export default function ComicCard({ comic, auth }) {
                             </p>
                         )}
 
-                        {comic.tags && comic.tags.length > 0 && (
-                            <div className="mt-4 pt-3 border-t border-white/5">
-                                <h5 className="text-[9px] font-bold uppercase tracking-widest text-[#8888a0] mb-2">Genres</h5>
-                                <div className="flex flex-wrap gap-1">
-                                    {comic.tags.map((tag, idx) => (
-                                        <span key={idx} className="text-[10px] bg-white/5 border border-white/10 text-gray-300 px-2 py-0.5 rounded-full">
-                                            {tag}
-                                        </span>
-                                    ))}
+                        {(() => {
+                            let parsedTags = [];
+                            try {
+                                parsedTags = typeof comic.tags === 'string' ? JSON.parse(comic.tags) : (comic.tags || []);
+                            } catch (e) {
+                                parsedTags = [];
+                            }
+                            
+                            return parsedTags.length > 0 && (
+                                <div className="mt-4 pt-3 border-t border-white/5">
+                                    <h5 className="text-[9px] font-bold uppercase tracking-widest text-[#8888a0] mb-2">Genres</h5>
+                                    <div className="flex flex-wrap gap-1">
+                                        {parsedTags.map((tag, idx) => (
+                                            <span key={idx} className="text-[10px] bg-white/5 border border-white/10 text-gray-300 px-2 py-0.5 rounded-full">
+                                                {tag}
+                                            </span>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            );
+                        })()}
                         {comic.rating && (
                             <div className="mt-3 pt-3 border-t border-white/5 flex justify-between items-center">
                                 <span className="text-[9px] font-bold uppercase tracking-widest text-[#8888a0]">Maturity / Quality</span>

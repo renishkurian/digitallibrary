@@ -81,7 +81,7 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
                             >
                                 <div className="relative aspect-[3/4] rounded-xl overflow-hidden border border-white/7 transition-all group-hover:border-white/20 group-hover:scale-[1.03] shadow-lg">
                                     <img 
-                                        src={comic.thumbnail ? `/thumbnails/${comic.thumbnail}` : '/img/no-thumb.jpg'} 
+                                        src={comic.thumbnail ? `/thumbs/${comic.thumbnail}` : '/img/no-thumb.jpg'} 
                                         alt={comic.title}
                                         className="w-full h-full object-cover"
                                     />

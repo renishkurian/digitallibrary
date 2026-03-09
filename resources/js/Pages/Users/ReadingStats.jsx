@@ -57,7 +57,7 @@ export default function ReadingStats({ auth, comicStats, dailyLogs }) {
                                     <div key={comic.id} className="bg-white/4 border border-white/7 rounded-xl p-4 flex items-center gap-4 transition-all hover:bg-white/6 hover:border-white/12">
                                         <div className="w-16 aspect-[3/4] rounded-lg overflow-hidden border border-white/10 shrink-0 shadow-lg">
                                             <img 
-                                                src={comic.thumbnail ? `/thumbnails/${comic.thumbnail}` : '/img/no-thumb.jpg'} 
+                                                src={comic.thumbnail ? `/thumbs/${comic.thumbnail}` : '/img/no-thumb.jpg'} 
                                                 alt={comic.title}
                                                 className="w-full h-full object-cover"
                                             />
