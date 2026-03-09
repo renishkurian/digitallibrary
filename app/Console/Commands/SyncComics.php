@@ -26,8 +26,13 @@ class SyncComics extends Command
 
         $this->info("Scanning $baseDir...");
 
+        // Pre-fetch all existing comic paths to avoid N+1 queries
+        $existingComics = \App\Models\Comic::all(['id', 'path', 'title', 'filename', 'thumbnail'])->keyBy('path');
+
         $files = \Illuminate\Support\Facades\File::allFiles($baseDir);
         $count = 0;
+        $updated = 0;
+        $new = 0;
 
         foreach ($files as $file) {
             if ($file->getExtension() !== 'pdf') continue;
@@ -37,20 +42,41 @@ class SyncComics extends Command
             $filename = $file->getFilename();
             $title = $this->cleanTitle($file->getFilenameWithoutExtension());
 
-            $comic = \App\Models\Comic::firstOrNew(['path' => $relativePath]);
-            $isNew = !$comic->exists;
+            // Check if comic exists in our pre-fetched map
+            $comic = $existingComics->get($relativePath);
+
+            if (!$comic) {
+                // New Comic
+                $comic = new \App\Models\Comic(['path' => $relativePath]);
+                $isNew = true;
+            } else {
+                $isNew = false;
+            }
 
             $comic->fill([
                 'title' => $title,
                 'filename' => $filename,
-                'thumbnail' => $this->getThumbnail($absolutePath, $thumbDir, $baseDir),
             ]);
-            $comic->save();
 
-            if ($isNew && \App\Models\Setting::get('ai_enabled') == '1') {
-                \App\Jobs\ProcessComicAIJob::dispatch($comic);
+            // Only generate thumbnail reference if not already set or file missing
+            if (!$comic->thumbnail) {
+                $comic->thumbnail = $this->getThumbnail($absolutePath, $thumbDir, $baseDir);
             }
 
+            // Only save if dirty
+            if ($comic->isDirty()) {
+                $comic->save();
+                if ($isNew) {
+                    $new++;
+                    if (\App\Models\Setting::get('ai_enabled') == '1') {
+                        \App\Jobs\ProcessComicAIJob::dispatch($comic);
+                    }
+                } else {
+                    $updated++;
+                }
+            }
+
+            // Still try to generate thumbnail if missing after all checks
             if (!$comic->thumbnail) {
                 if ($comic->generateThumbnail()) {
                     $this->info("Generated missing thumbnail for {$title}");
@@ -60,7 +86,7 @@ class SyncComics extends Command
             $count++;
         }
 
-        $this->info("Synced $count comics.");
+        $this->info("Scan completed. Total: $count, New: $new, Updated: $updated.");
     }
 
     protected function cleanTitle($name)
