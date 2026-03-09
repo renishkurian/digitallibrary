@@ -141,6 +141,20 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
     const setVisibility = (v) => router.get(route('admin.comics.index'), { ...filters, visibility: v, approval: 'all' }, { replace: true, preserveScroll: false });
     const setApprovalFilter = (a) => router.get(route('admin.comics.index'), { ...filters, approval: a, visibility: 'all' }, { replace: true, preserveScroll: false });
 
+    const approveAllPending = () => {
+        requestConfirm({
+            title: 'Approve All Pending',
+            message: 'Are you sure you want to approve ALL pending comics? This cannot be undone.',
+            confirmText: 'Approve All',
+            confirmStyle: 'primary',
+            onConfirm: () => {
+                router.post(route('admin.comics.approve-all-pending'), {}, {
+                    preserveScroll: true,
+                });
+            }
+        });
+    };
+
     const TABS = [
         { key: 'all',    label: 'All Comics' },
         { key: 'public', label: 'Public' },
@@ -253,6 +267,15 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                         ))}
                     </div>
 
+                    <div className="flex items-center gap-3">
+                        {/* Approve All Pending button — always visible */}
+                        <button 
+                            onClick={approveAllPending}
+                            className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-5 py-2 rounded-lg text-[11px] font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-all"
+                        >
+                            ✅ Approve All Pending
+                        </button>
+
                     {selectedIds.length > 0 && (
                         <div className="flex items-center gap-4 bg-[#e8003d]/10 border border-[#e8003d]/20 px-4 py-2 rounded-xl animate-in fade-in slide-in-from-top-2">
                             <span className="text-[11px] font-black text-[#e8003d] uppercase tracking-widest">{selectedIds.length} Selected</span>
@@ -273,6 +296,7 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                             </button>
                         </div>
                     )}
+                    </div>
                 </div>
 
                 {/* Comics Table */}

@@ -438,6 +438,14 @@ class ComicController extends Controller
         return back()->with('success', count($request->ids) . ' comics approved.');
     }
 
+    public function approveAllPending()
+    {
+        $count = Comic::where('is_approved', false)->count();
+        Comic::where('is_approved', false)->update(['is_approved' => true]);
+
+        return back()->with('success', $count . ' pending comics approved.');
+    }
+
     public function generateAiMeta(Comic $comic)
     {
         if (\App\Models\Setting::get('ai_enabled') != '1') {

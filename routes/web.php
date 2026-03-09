@@ -43,6 +43,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/comics/{comic}/regenerate-thumbnail', [ComicController::class, 'regenerateThumbnail'])->name('comics.regenerate-thumbnail');
         Route::post('/comics/{comic}/approve', [ComicController::class, 'approve'])->name('comics.approve');
         Route::post('/comics/bulk-approve', [ComicController::class, 'bulkApprove'])->name('comics.bulk-approve');
+        Route::post('/comics/approve-all-pending', [ComicController::class, 'approveAllPending'])->name('comics.approve-all-pending');
         Route::post('/comics/{comic}/generate-ai', [ComicController::class, 'generateAiMeta'])->name('comics.generate-ai');
         Route::post('/comics/bulk-generate-ai', [ComicController::class, 'bulkGenerateAiMeta'])->name('comics.bulk-generate-ai');
         Route::post('/comics/{comic}/share', [ComicController::class, 'shareWith'])->name('comics.share');
