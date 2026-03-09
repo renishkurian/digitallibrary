@@ -145,18 +145,40 @@ class Comic extends Model
             mkdir($thumbDir, 0755, true);
         }
 
-        // 1. Try Filename-based thumbnail (highest priority for user symlinks)
-        $filename = pathinfo($absolutePdfPath, PATHINFO_FILENAME);
-        if (file_exists($thumbDir . "/" . $filename . ".png")) {
-            $this->update(['thumbnail' => $filename . ".png"]);
-            return true;
+        // 1. Try Filename-based variants (highest priority)
+        $basename = pathinfo($absolutePdfPath, PATHINFO_BASENAME); // e.g., "ബാലഭൂമി.pdf"
+        $filename = pathinfo($absolutePdfPath, PATHINFO_FILENAME); // e.g., "ബാലഭൂമി"
+
+        $patterns = [
+            $basename . ".png",   // "ബാലഭൂമി.pdf.png"
+            $basename . ".PNG",   // "ബാലഭൂമി.pdf.PNG"
+            $filename . ".png",   // "ബാലഭൂമി.png"
+            $filename . ".jpg",   // "ബാലഭൂമി.jpg"
+            $filename . ".jpeg",  // "ബാലഭൂമി.jpeg"
+            str_replace('.pdf', '.PDF.png', $basename), // "ബാലഭൂമി.PDF.png"
+            str_replace('.pdf', '.Pdf.png', $basename), // "ബാലഭൂമി.Pdf.png"
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (file_exists($thumbDir . "/" . $pattern)) {
+                $this->update(['thumbnail' => $pattern]);
+                return true;
+            }
         }
 
-        // 2. Try MD5-based thumbnail (second priority)
+        // 2. Try MD5-based variants (second priority)
         $md5 = md5($absolutePdfPath);
-        if (file_exists($thumbDir . "/" . $md5 . ".png")) {
-            $this->update(['thumbnail' => $md5 . ".png"]);
-            return true;
+        $md5Patterns = [
+            $md5 . ".png",
+            $md5 . ".jpg",
+            $md5 . ".jpeg",
+        ];
+
+        foreach ($md5Patterns as $pattern) {
+            if (file_exists($thumbDir . "/" . $pattern)) {
+                $this->update(['thumbnail' => $pattern]);
+                return true;
+            }
         }
 
         // 3. Generate if neither exists

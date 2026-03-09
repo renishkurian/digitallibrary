@@ -103,13 +103,33 @@ class SyncComics extends Command
 
     protected function getThumbnail($pdfPath, $thumbDir, $baseDir)
     {
-        // For now, let's just return what the original logic did
-        // Original logic checked for png by filename OR md5
+        $basename = pathinfo($pdfPath, PATHINFO_BASENAME);
         $filename = pathinfo($pdfPath, PATHINFO_FILENAME);
-        if (file_exists($thumbDir . "/" . $filename . ".png")) return $filename . ".png";
+
+        $patterns = [
+            $basename . ".png",   // "ബാലഭൂമി.pdf.png"
+            $basename . ".PNG",   // "ബാലഭൂമി.pdf.PNG"
+            $filename . ".png",   // "ബാലഭൂമി.png"
+            $filename . ".jpg",   // "ബാലഭൂമി.jpg"
+            $filename . ".jpeg",  // "ബാലഭൂമി.jpeg"
+            str_replace('.pdf', '.PDF.png', $basename), // "ബാലഭൂമി.PDF.png"
+            str_replace('.pdf', '.Pdf.png', $basename), // "ബാലഭൂമി.Pdf.png"
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (file_exists($thumbDir . "/" . $pattern)) return $pattern;
+        }
 
         $md5 = md5($pdfPath);
-        if (file_exists($thumbDir . "/" . $md5 . ".png")) return $md5 . ".png";
+        $md5Patterns = [
+            $md5 . ".png",
+            $md5 . ".jpg",
+            $md5 . ".jpeg",
+        ];
+
+        foreach ($md5Patterns as $pattern) {
+            if (file_exists($thumbDir . "/" . $pattern)) return $pattern;
+        }
 
         return null;
     }
