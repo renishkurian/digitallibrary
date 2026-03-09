@@ -44,7 +44,7 @@ jobs:
 
       - name: Sync files to production directory
         run: |
-          sudo rsync -av --exclude='.git' --exclude='.github' --exclude='node_modules' --exclude='.env' --exclude='database/database.sqlite' --exclude='database/database.sqlite-journal' ./ /var/www/html/balarama/
+          sudo rsync -av --exclude='.git' --exclude='.github' --exclude='node_modules' --exclude='.env' --exclude='database/database.sqlite' --exclude='database/database.sqlite-journal' --exclude='public/thumbs' ./ /var/www/html/balarama/
           
           # Exhaustive permission fix for production
           sudo chown -R www-data:www-data /var/www/html/balarama
@@ -76,6 +76,15 @@ jobs:
           sudo touch /var/www/html/balarama/storage/logs/laravel.log
           sudo chmod 666 /var/www/html/balarama/storage/logs/laravel.log
           sudo chown www-data:www-data /var/www/html/balarama/storage/logs/laravel.log
+          
+          # Recreate thumbs symlink if missing (points to shared comics thumbs directory)
+          if [ ! -L /var/www/html/balarama/public/thumbs ] && [ ! -d /var/www/html/balarama/public/thumbs ]; then
+            sudo ln -s /var/www/html/comics/thumbs /var/www/html/balarama/public/thumbs
+          elif [ -d /var/www/html/balarama/public/thumbs ] && [ ! -L /var/www/html/balarama/public/thumbs ]; then
+            # If rsync created a regular directory, replace it with the symlink
+            sudo rm -rf /var/www/html/balarama/public/thumbs
+            sudo ln -s /var/www/html/comics/thumbs /var/www/html/balarama/public/thumbs
+          fi
 
       - name: Post-sync Laravel optimization
         run: |
@@ -87,4 +96,5 @@ jobs:
 
       - name: Restart services
         run: |
-          sudo systemctl restart apache2 || sudo systemctl restart nginx || sudo systemctl restart php8.4-fpm || true
+          sudo systemctl restart nginx || true
+          sudo systemctl restart php8.4-fpm || true

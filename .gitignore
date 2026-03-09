@@ -26,3 +26,6 @@ Thumbs.db
 # Database
 /database/database.sqlite
 /database/database.sqlite-journal
+
+# Thumbnails (symlinked on production)
+/public/thumbs
