@@ -58,6 +58,23 @@ export default function ComicCard({ comic, auth }) {
                         </svg>
                     </Link>
                     
+                    <button 
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(comic.share_url);
+                            alert('Share link copied!');
+                        }}
+                        className="action-btn w-[30px] h-[30px] rounded-full flex items-center justify-center border border-white/10 bg-black/50 backdrop-blur-md text-white cursor-pointer transition-colors hover:bg-blue-500"
+                        title="Copy Share Link"
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                            <polyline points="16 6 12 2 8 6"></polyline>
+                            <line x1="12" y1="2" x2="12" y2="15"></line>
+                        </svg>
+                    </button>
+
                     {auth?.user?.is_admin && (
                         <Link 
                             href={route('admin.comics.toggle-visibility', comic.id)} 

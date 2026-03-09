@@ -16,9 +16,20 @@ class Comic extends Model
         'is_personal',
         'is_common',
         'is_approved',
-        'pages_count',
         'user_id',
     ];
+
+    protected $appends = ['encrypted_id', 'share_url'];
+
+    public function getEncryptedIdAttribute()
+    {
+        return encrypt($this->id);
+    }
+
+    public function getShareUrlAttribute()
+    {
+        return route('comics.shared', ['id' => $this->encrypted_id]);
+    }
 
     public function readers()
     {

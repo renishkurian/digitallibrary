@@ -18,6 +18,7 @@ Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['au
 Route::get('/', [ComicController::class, 'index'])->name('comics.index');
 Route::get('/comics/{comic}', [ComicController::class, 'show'])->name('comics.show');
 Route::get('/comics/{comic}/serve', [ComicController::class, 'serve'])->name('comics.serve');
+Route::get('/s/{id}', [ComicController::class, 'share'])->name('comics.shared');
 
 Route::get('/shelves', [ShelfController::class, 'index'])->name('shelves.index');
 Route::get('/shelves/{shelf}', [ShelfController::class, 'show'])->name('shelves.show');

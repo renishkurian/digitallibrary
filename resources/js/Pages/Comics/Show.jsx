@@ -214,6 +214,15 @@ export default function Show({ comic, last_read_page }) {
                 </div>
 
                 <div className="flex gap-2.5">
+                    <button 
+                        onClick={() => {
+                            navigator.clipboard.writeText(comic.share_url);
+                            alert('Share link copied!');
+                        }}
+                        className="cv-nav-btn px-3 bg-blue-500/20 border border-blue-500/30 rounded-lg text-blue-400 text-[11px] font-bold uppercase tracking-widest cursor-pointer transition-colors hover:bg-blue-500/30"
+                    >
+                        Share PDF
+                    </button>
                     <button className="cv-nav-btn w-8.5 h-8.5 bg-white/6 border border-white/10 rounded-lg text-[#f0f0f5] cursor-pointer hover:bg-white/13" onClick={() => zoom(-0.1)}>-</button>
                     <button className="cv-nav-btn w-8.5 h-8.5 bg-white/6 border border-white/10 rounded-lg text-[#f0f0f5] cursor-pointer hover:bg-white/13" onClick={() => zoom(0.1)}>+</button>
                 </div>

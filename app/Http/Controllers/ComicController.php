@@ -468,4 +468,27 @@ class ComicController extends Controller
 
         return response()->json(['success' => true]);
     }
+
+    public function share($id)
+    {
+        try {
+            $comicId = decrypt($id);
+            $comic   = Comic::findOrFail($comicId);
+
+            $baseDir = rtrim(config('comics.base_dir'), '/');
+            $comicPath = urldecode(ltrim($comic->path, '/'));
+            $path = $baseDir . '/' . $comicPath;
+
+            if (!\Illuminate\Support\Facades\File::exists($path)) {
+                abort(404);
+            }
+
+            return response()->file($path, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="' . str_replace('"', '\"', $comic->filename) . '"'
+            ]);
+        } catch (\Exception $e) {
+            abort(404);
+        }
+    }
 }
