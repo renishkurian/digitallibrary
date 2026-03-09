@@ -25,6 +25,8 @@ class CategoryController extends Controller
                 'is_read' => Auth::check() ? $comic->isReadBy(Auth::user()) : false,
                 'readers_count' => $comic->readers_count,
                 'share_url' => $comic->share_url,
+                'rating' => $comic->rating,
+                'tags' => $comic->tags,
             ]);
 
         return Inertia::render('Categories/Show', [

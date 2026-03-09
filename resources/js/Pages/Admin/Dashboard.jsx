@@ -51,11 +51,13 @@ export default function Dashboard({ auth, stats, recentComics }) {
                 </div>
 
                 {/* Quick Actions */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
                     {[
                         { href: route('admin.comics.index'), icon: '📚', title: 'Manage Comics', desc: 'Upload, edit, hide/show, and share comics' },
                         { href: route('admin.users.index'), icon: '👥', title: 'Manage Users', desc: 'Assign roles, edit profiles, delete accounts' },
-                        { href: route('admin.shelves.index'), icon: '🗂️', title: 'Manage Shelves', desc: 'Organize comics into collections' },
+                        { href: route('admin.settings.index'), icon: '⚙️', title: 'AI Settings', desc: 'Configure auto-tagging and integrations' },
+                        { href: route('admin.ai-logs.index'), icon: '📊', title: 'AI Logs', desc: 'View API usage, prompts, and tokens' },
+                        { href: route('admin.ai-playground.index'), icon: '🧪', title: 'AI Playground', desc: 'Query database and generate summaries' },
                         { href: route('admin.roles.index'), icon: '🔑', title: 'Roles & Permissions', desc: 'Define access levels and security' },
                     ].map(action => (
                         <a key={action.href} href={action.href}

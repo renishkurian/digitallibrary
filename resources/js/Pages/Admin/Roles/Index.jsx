@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useForm, Head, router } from '@inertiajs/react';
 import ComicLayout from '@/Layouts/ComicLayout';
+import ConfirmModal from '@/Components/ConfirmModal';
 
 export default function Index({ auth, roles, permissions }) {
     const { data, setData, post, processing, errors, reset } = useForm({
@@ -9,6 +10,10 @@ export default function Index({ auth, roles, permissions }) {
 
     const [editingRole, setEditingRole] = useState(null);
     const [selectedPermissions, setSelectedPermissions] = useState([]);
+    const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, confirmText: 'Confirm', confirmStyle: 'danger' });
+
+    const requestConfirm = (options) => setConfirmConfig({ ...options, isOpen: true });
+    const closeConfirm = () => setConfirmConfig(prev => ({ ...prev, isOpen: false }));
 
     const submitRole = (e) => {
         e.preventDefault();
@@ -39,9 +44,15 @@ export default function Index({ auth, roles, permissions }) {
     };
 
     const deleteRole = (role) => {
-        if (confirm(`Are you sure you want to delete the role "${role.name}"?`)) {
-            router.delete(route('admin.roles.destroy', role.id));
-        }
+        requestConfirm({
+            title: 'Delete Role',
+            message: `Are you sure you want to delete the role "${role.name}"?`,
+            confirmText: 'Delete',
+            confirmStyle: 'danger',
+            onConfirm: () => {
+                router.delete(route('admin.roles.destroy', role.id));
+            }
+        });
     };
 
     return (
@@ -196,6 +207,16 @@ export default function Index({ auth, roles, permissions }) {
                 .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(232,0,61,0.2); border-radius: 10px; }
                 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(232,0,61,0.4); }
             `}} />
+
+            <ConfirmModal 
+                isOpen={confirmConfig.isOpen}
+                title={confirmConfig.title}
+                message={confirmConfig.message}
+                confirmText={confirmConfig.confirmText}
+                confirmStyle={confirmConfig.confirmStyle}
+                onConfirm={confirmConfig.onConfirm}
+                onCancel={closeConfirm}
+            />
         </ComicLayout>
     );
 }

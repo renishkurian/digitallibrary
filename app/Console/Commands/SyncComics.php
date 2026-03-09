@@ -38,12 +38,18 @@ class SyncComics extends Command
             $title = $this->cleanTitle($file->getFilenameWithoutExtension());
 
             $comic = \App\Models\Comic::firstOrNew(['path' => $relativePath]);
+            $isNew = !$comic->exists;
+
             $comic->fill([
                 'title' => $title,
                 'filename' => $filename,
                 'thumbnail' => $this->getThumbnail($absolutePath, $thumbDir, $baseDir),
             ]);
             $comic->save();
+
+            if ($isNew && \App\Models\Setting::get('ai_enabled') == '1') {
+                \App\Jobs\ProcessComicAIJob::dispatch($comic);
+            }
 
             if (!$comic->thumbnail) {
                 if ($comic->generateThumbnail()) {

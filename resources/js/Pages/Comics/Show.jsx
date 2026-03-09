@@ -13,6 +13,7 @@ export default function Show({ comic, last_read_page }) {
     const [numPages, setNumPages] = useState(0);
     const [scale, setScale] = useState(1.0);
     const [loading, setLoading] = useState(true);
+    const [showAIInfo, setShowAIInfo] = useState(false);
     
     const canvasRef = useRef(null);
     const lastSyncedPage = useRef(last_read_page || 1);
@@ -214,20 +215,59 @@ export default function Show({ comic, last_read_page }) {
                     </button>
                 </div>
 
-                <div className="flex gap-2.5">
+                <div className="flex items-center gap-2.5">
+                    {(comic.ai_summary || (comic.tags && comic.tags.length > 0)) && (
+                        <button 
+                            onClick={() => setShowAIInfo(!showAIInfo)}
+                            className={`cv-nav-btn px-3 h-8.5 rounded-lg text-[11px] font-bold uppercase tracking-widest cursor-pointer transition-colors flex items-center gap-1.5 ${showAIInfo ? 'bg-purple-500/20 border border-purple-500/30 text-purple-400' : 'bg-white/5 border border-white/10 text-[#8888a0] hover:bg-white/10 hover:text-white'}`}
+                        >
+                            <span className="text-[13px] leading-none">✨</span> AI Info
+                        </button>
+                    )}
                     <button 
                         onClick={() => {
                             navigator.clipboard.writeText(comic.share_url);
                             toast.success('Share link copied!');
                         }}
-                        className="cv-nav-btn px-3 bg-blue-500/20 border border-blue-500/30 rounded-lg text-blue-400 text-[11px] font-bold uppercase tracking-widest cursor-pointer transition-colors hover:bg-blue-500/30"
+                        className="cv-nav-btn px-3 h-8.5 bg-blue-500/20 border border-blue-500/30 rounded-lg text-blue-400 text-[11px] font-bold uppercase tracking-widest cursor-pointer transition-colors hover:bg-blue-500/30 flex items-center justify-center"
                     >
                         Share PDF
                     </button>
-                    <button className="cv-nav-btn w-8.5 h-8.5 bg-white/6 border border-white/10 rounded-lg text-[#f0f0f5] cursor-pointer hover:bg-white/13" onClick={() => zoom(-0.1)}>-</button>
-                    <button className="cv-nav-btn w-8.5 h-8.5 bg-white/6 border border-white/10 rounded-lg text-[#f0f0f5] cursor-pointer hover:bg-white/13" onClick={() => zoom(0.1)}>+</button>
+                    <button className="cv-nav-btn w-8.5 h-8.5 bg-white/6 border border-white/10 rounded-lg text-[#f0f0f5] cursor-pointer" onClick={() => zoom(-0.1)}>-</button>
+                    <button className="cv-nav-btn w-8.5 h-8.5 bg-white/6 border border-white/10 rounded-lg text-[#f0f0f5] cursor-pointer" onClick={() => zoom(0.1)}>+</button>
                 </div>
             </div>
+
+            {/* AI Info Panel */}
+            {showAIInfo && (comic.ai_summary || comic.tags) && (
+                <div className="border-b border-white/5 p-5 shadow-2xl z-[150] relative bg-[#0a0a0f]/95 backdrop-blur-md">
+                    <div className="max-w-4xl mx-auto flex flex-col gap-4">
+                        {comic.ai_summary && (
+                            <div>
+                                <h4 className="text-purple-400 text-[10px] font-bold uppercase tracking-[2px] mb-2 flex items-center gap-1.5"><span className="text-[12px]">✨</span> AI GENERATED SUMMARY</h4>
+                                <p className="text-gray-300 text-[13px] leading-relaxed font-normal">{comic.ai_summary}</p>
+                            </div>
+                        )}
+                        {comic.tags && comic.tags.length > 0 && (
+                            <div>
+                                <h4 className="text-[#8888a0] text-[10px] font-bold uppercase tracking-[2px] mb-2">METADATA</h4>
+                                <div className="flex flex-wrap gap-2">
+                                    {comic.tags.map((tag, i) => (
+                                        <span key={i} className="px-2.5 py-1 rounded bg-white/5 border border-white/10 text-gray-300 text-[11px] font-bold uppercase tracking-wide">
+                                            {tag}
+                                        </span>
+                                    ))}
+                                    {comic.rating && (
+                                        <span className="px-3 py-1 rounded bg-[#ffb400]/10 border border-[#ffb400]/20 text-[#ffb400] text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 ml-2">
+                                            <span>★</span> {comic.rating} RATING
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {loading && (
                 <div className="cv-loading absolute inset-0 top-14 flex flex-col items-center justify-center gap-4 z-[5] pointer-events-none">

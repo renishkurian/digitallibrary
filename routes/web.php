@@ -43,6 +43,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/comics/{comic}/regenerate-thumbnail', [ComicController::class, 'regenerateThumbnail'])->name('comics.regenerate-thumbnail');
         Route::post('/comics/{comic}/approve', [ComicController::class, 'approve'])->name('comics.approve');
         Route::post('/comics/bulk-approve', [ComicController::class, 'bulkApprove'])->name('comics.bulk-approve');
+        Route::post('/comics/{comic}/generate-ai', [ComicController::class, 'generateAiMeta'])->name('comics.generate-ai');
+        Route::post('/comics/bulk-generate-ai', [ComicController::class, 'bulkGenerateAiMeta'])->name('comics.bulk-generate-ai');
         Route::post('/comics/{comic}/share', [ComicController::class, 'shareWith'])->name('comics.share');
         Route::delete('/comics/{comic}/share/{user}', [ComicController::class, 'revokeShare'])->name('comics.revoke-share');
         Route::post('/comics/{comic}/share-role', [ComicController::class, 'shareWithRole'])->name('comics.share-role');
@@ -75,6 +77,17 @@ Route::middleware('auth')->group(function () {
         Route::post('/roles', [RolePermissionController::class, 'store'])->name('roles.store');
         Route::put('/roles/{role}', [RolePermissionController::class, 'update'])->name('roles.update');
         Route::delete('/roles/{role}', [RolePermissionController::class, 'destroy'])->name('roles.destroy');
+
+        // Settings Management
+        Route::get('/settings', [App\Http\Controllers\Admin\SettingController::class, 'index'])->name('settings.index');
+        Route::post('/settings', [App\Http\Controllers\Admin\SettingController::class, 'update'])->name('settings.update');
+
+        // AI Logs
+        Route::get('/ai-logs', [App\Http\Controllers\Admin\AiLogController::class, 'index'])->name('ai-logs.index');
+
+        // AI Playground
+        Route::get('/ai-playground', [App\Http\Controllers\Admin\AiPlaygroundController::class, 'index'])->name('ai-playground.index');
+        Route::post('/ai-playground/query', [App\Http\Controllers\Admin\AiPlaygroundController::class, 'query'])->name('ai-playground.query');
     });
 });
 

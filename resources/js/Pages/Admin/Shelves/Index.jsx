@@ -1,9 +1,14 @@
 import { useState } from 'react';
 import { Head, useForm } from '@inertiajs/react';
 import ComicLayout from '@/Layouts/ComicLayout';
+import ConfirmModal from '@/Components/ConfirmModal';
 
 export default function Index({ shelves }) {
     const [editingShelf, setEditingShelf] = useState(null);
+    const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, confirmText: 'Confirm', confirmStyle: 'danger' });
+
+    const requestConfirm = (options) => setConfirmConfig({ ...options, isOpen: true });
+    const closeConfirm = () => setConfirmConfig(prev => ({ ...prev, isOpen: false }));
 
     const { data, setData, post, put, delete: destroy, processing, errors, reset } = useForm({
         name: '',
@@ -39,9 +44,15 @@ export default function Index({ shelves }) {
     };
 
     const handleDelete = (id) => {
-        if (confirm('Are you sure you want to delete this shelf?')) {
-            destroy(route('admin.shelves.destroy', id));
-        }
+        requestConfirm({
+            title: 'Delete Shelf',
+            message: 'Are you sure you want to delete this shelf?',
+            confirmText: 'Delete',
+            confirmStyle: 'danger',
+            onConfirm: () => {
+                destroy(route('admin.shelves.destroy', id));
+            }
+        });
     };
 
     return (
@@ -186,6 +197,16 @@ export default function Index({ shelves }) {
                     </div>
                 </div>
             </div>
+
+            <ConfirmModal 
+                isOpen={confirmConfig.isOpen}
+                title={confirmConfig.title}
+                message={confirmConfig.message}
+                confirmText={confirmConfig.confirmText}
+                confirmStyle={confirmConfig.confirmStyle}
+                onConfirm={confirmConfig.onConfirm}
+                onCancel={closeConfirm}
+            />
         </ComicLayout>
     );
 }

@@ -1,10 +1,15 @@
 import { useState } from 'react';
 import { Head, useForm } from '@inertiajs/react';
 import ComicLayout from '@/Layouts/ComicLayout';
+import ConfirmModal from '@/Components/ConfirmModal';
 
 export default function Index({ categories, parentCategories, auth, users, roles }) {
     const [editingCategory, setEditingCategory] = useState(null);
     const [sharingCategory, setSharingCategory] = useState(null);
+    const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, confirmText: 'Confirm', confirmStyle: 'danger' });
+
+    const requestConfirm = (options) => setConfirmConfig({ ...options, isOpen: true });
+    const closeConfirm = () => setConfirmConfig(prev => ({ ...prev, isOpen: false }));
 
     const { data, setData, post, delete: destroy, processing, errors, reset } = useForm({
         name: '',
@@ -64,9 +69,15 @@ export default function Index({ categories, parentCategories, auth, users, roles
     };
 
     const handleDelete = (id) => {
-        if (confirm('Are you sure? This will also delete any subcategories.')) {
-            destroy(route('admin.categories.destroy', id));
-        }
+        requestConfirm({
+            title: 'Delete Category',
+            message: 'Are you sure? This will also delete any subcategories.',
+            confirmText: 'Delete',
+            confirmStyle: 'danger',
+            onConfirm: () => {
+                destroy(route('admin.categories.destroy', id));
+            }
+        });
     };
 
     return (
@@ -284,6 +295,16 @@ export default function Index({ categories, parentCategories, auth, users, roles
                     </div>
                 </div>
             )}
+
+            <ConfirmModal 
+                isOpen={confirmConfig.isOpen}
+                title={confirmConfig.title}
+                message={confirmConfig.message}
+                confirmText={confirmConfig.confirmText}
+                confirmStyle={confirmConfig.confirmStyle}
+                onConfirm={confirmConfig.onConfirm}
+                onCancel={closeConfirm}
+            />
         </ComicLayout>
     );
 }

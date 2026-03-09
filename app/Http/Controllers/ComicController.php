@@ -109,6 +109,8 @@ class ComicController extends Controller
                     'user_id' => $comic->user_id,
                     'readers_count' => $comic->readers_count,
                     'share_url' => $comic->share_url,
+                    'rating' => $comic->rating,
+                    'tags' => $comic->tags,
                 ];
             });
 
@@ -263,6 +265,8 @@ class ComicController extends Controller
             'shared_with'   => $comic->sharedWith->map(fn($u) => ['id' => $u->id, 'name' => $u->name, 'email' => $u->email]),
             'shared_roles'  => $comic->sharedRoles->map(fn($r) => ['id' => $r->id, 'name' => $r->name]),
             'share_url'     => $comic->share_url,
+            'rating'        => $comic->rating,
+            'tags'          => $comic->tags,
         ]);
 
         return Inertia::render('Admin/Comics/Index', [
@@ -358,14 +362,21 @@ class ComicController extends Controller
         $comic = Comic::create($data);
 
         // Generate thumbnail if not provided
+        $thumbnailStatus = '';
         if (!$request->hasFile('thumbnail')) {
             if ($comic->generateThumbnail()) {
-                return back()->with('success', 'Comic uploaded and thumbnail generated successfully.');
+                $thumbnailStatus = ' and thumbnail generated';
+            } else {
+                $thumbnailStatus = ' (thumbnail generation failed)';
             }
-            return back()->with('success', 'Comic uploaded successfully, but thumbnail generation failed.');
         }
 
-        return back()->with('success', 'Comic uploaded successfully.');
+        if (\App\Models\Setting::get('ai_enabled') == '1') {
+            \App\Jobs\ProcessComicAIJob::dispatch($comic, Auth::id());
+            $thumbnailStatus .= '. AI auto-tagging process started in the background.';
+        }
+
+        return back()->with('success', 'Comic uploaded successfully' . $thumbnailStatus);
     }
 
     public function regenerateThumbnail(Comic $comic)
@@ -425,6 +436,36 @@ class ComicController extends Controller
         Comic::whereIn('id', $request->ids)->update(['is_approved' => true]);
 
         return back()->with('success', count($request->ids) . ' comics approved.');
+    }
+
+    public function generateAiMeta(Comic $comic)
+    {
+        if (\App\Models\Setting::get('ai_enabled') != '1') {
+            return back()->with('error', 'AI features are not enabled in settings.');
+        }
+
+        \App\Jobs\ProcessComicAIJob::dispatch($comic, Auth::id());
+
+        return back()->with('success', 'AI auto-tagging process started for ' . $comic->title . '.');
+    }
+
+    public function bulkGenerateAiMeta(Request $request)
+    {
+        if (\App\Models\Setting::get('ai_enabled') != '1') {
+            return back()->with('error', 'AI features are not enabled in settings.');
+        }
+
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:comics,id',
+        ]);
+
+        $comics = Comic::whereIn('id', $request->ids)->get();
+        foreach ($comics as $comic) {
+            \App\Jobs\ProcessComicAIJob::dispatch($comic, Auth::id());
+        }
+
+        return back()->with('success', count($comics) . ' comics queued for AI auto-tagging.');
     }
 
     public function syncReadingTime(Request $request, Comic $comic)

@@ -17,9 +17,21 @@ class Comic extends Model
         'is_common',
         'is_approved',
         'user_id',
+        'ai_summary',
+        'rating',
+        'tags',
     ];
 
     protected $appends = ['encrypted_id', 'share_url'];
+
+    protected $casts = [
+        'is_hidden' => 'boolean',
+        'is_personal' => 'boolean',
+        'is_common' => 'boolean',
+        'is_approved' => 'boolean',
+        'tags' => 'array',
+        'rating' => 'float',
+    ];
 
     public function getEncryptedIdAttribute()
     {

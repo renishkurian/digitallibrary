@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, usePage, useForm } from '@inertiajs/react';
+import Toast from '@/Components/Toast';
 
 export default function ComicLayout({ children, title }) {
     const { auth } = usePage().props;
@@ -88,6 +89,7 @@ export default function ComicLayout({ children, title }) {
             <main className="pt-20 px-10 pb-12">
                 {children}
             </main>
+            <Toast />
         </div>
     );
 }
