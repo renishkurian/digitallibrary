@@ -95,7 +95,7 @@ class ComicController extends Controller
             $query->latest();
         }
 
-        $comics = $query->paginate(30)
+        $comics = $query->paginate(28)
             ->withQueryString()
             ->through(function ($comic) {
                 /** @var \App\Models\Comic $comic */
@@ -249,7 +249,7 @@ class ComicController extends Controller
             $query->where('is_hidden', true);
         }
 
-        $comics = $query->paginate(50)->withQueryString()->through(fn($comic) => [
+        $comics = $query->paginate(28)->withQueryString()->through(fn($comic) => [
             'id'            => $comic->id,
             'title'         => $comic->title,
             'path'          => $comic->path,
