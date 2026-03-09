@@ -59,7 +59,7 @@ export default function Index({ shelves }) {
                                 type="text"
                                 value={data.name}
                                 onChange={e => setData('name', e.target.value)}
-                                className="bg-white/7 border border-white/10 text-white rounded-lg p-3 outline-none focus:border-[#e8003d] transition-colors"
+                                className="bg-[#0c0c12] border border-white/10 text-white rounded-lg p-3 outline-none focus:border-[#e8003d] transition-colors"
                                 placeholder="Shelf name"
                             />
                             {errors.name && <span className="text-[#e8003d] text-xs">{errors.name}</span>}
@@ -70,7 +70,7 @@ export default function Index({ shelves }) {
                             <select 
                                 value={data.is_hidden ? '1' : '0'}
                                 onChange={e => setData('is_hidden', e.target.value === '1')}
-                                className="bg-white/7 border border-white/10 text-white rounded-lg p-3 outline-none focus:border-[#e8003d] transition-colors"
+                                className="bg-[#0c0c12] border border-white/10 text-white rounded-lg p-3 outline-none focus:border-[#e8003d] transition-colors"
                             >
                                 <option value="0">Public</option>
                                 <option value="1">Hidden (Admin Only)</option>
@@ -82,7 +82,7 @@ export default function Index({ shelves }) {
                             <textarea 
                                 value={data.description}
                                 onChange={e => setData('description', e.target.value)}
-                                className="bg-white/7 border border-white/10 text-white rounded-lg p-3 h-24 outline-none focus:border-[#e8003d] transition-colors resize-none"
+                                className="bg-[#0c0c12] border border-white/10 text-white rounded-lg p-3 h-24 outline-none focus:border-[#e8003d] transition-colors resize-none"
                                 placeholder="Write something about this shelf..."
                             />
                         </div>

@@ -1,19 +1,23 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Head, Link } from '@inertiajs/react';
+import axios from 'axios';
 import * as pdfjsLib from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
-export default function Show({ comic }) {
+export default function Show({ comic, last_read_page }) {
     const [pdfDoc, setPdfDoc] = useState(null);
-    const [pageNum, setPageNum] = useState(1);
+    const [pageNum, setPageNum] = useState(last_read_page || 1);
     const [numPages, setNumPages] = useState(0);
     const [scale, setScale] = useState(1.0);
     const [loading, setLoading] = useState(true);
     
     const canvasRef = useRef(null);
+    const lastSyncedPage = useRef(last_read_page || 1);
     const renderTaskRef = useRef(null);
+    const timeRef = useRef(0);
+    const lastSyncTimeRef = useRef(Date.now());
 
     const renderPage = useCallback((num, currentScale) => {
         if (!pdfDoc) return;
@@ -73,6 +77,63 @@ export default function Show({ comic }) {
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [pageNum, numPages]);
+
+    // Sync page number to backend
+    useEffect(() => {
+        if (pageNum !== lastSyncedPage.current) {
+            const timeout = setTimeout(() => {
+                const currentSeconds = Math.floor((Date.now() - lastSyncTimeRef.current) / 1000);
+                
+                axios.post(route('comics.sync-time', comic.id), { 
+                    page: pageNum,
+                    seconds: Math.max(1, currentSeconds)
+                })
+                .then(() => {
+                    lastSyncedPage.current = pageNum;
+                    lastSyncTimeRef.current = Date.now();
+                })
+                .catch(err => console.error('Failed to sync page/time:', err));
+            }, 2000); // 2 second debounce
+
+            return () => clearTimeout(timeout);
+        }
+    }, [pageNum, comic.id]);
+
+    // Periodic time sync (every 30s)
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const currentSeconds = Math.floor((Date.now() - lastSyncTimeRef.current) / 1000);
+            if (currentSeconds >= 30) {
+                axios.post(route('comics.sync-time', comic.id), { 
+                    page: pageNum,
+                    seconds: currentSeconds
+                })
+                .then(() => {
+                    lastSyncTimeRef.current = Date.now();
+                })
+                .catch(err => console.error('Failed periodic sync:', err));
+            }
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [comic.id, pageNum]);
+
+    // Final sync on unmount
+    useEffect(() => {
+        return () => {
+            const currentSeconds = Math.floor((Date.now() - lastSyncTimeRef.current) / 1000);
+            if (currentSeconds > 0) {
+                // Use Navigator.sendBeacon for more reliable unmount sync if needed, 
+                // but axios with a small delay or just a standard post might work here in Inertia.
+                // However, since we want to be sure, we'll just try a standard post.
+                navigator.sendBeacon(route('comics.sync-time', comic.id), JSON.stringify({
+                    page: pageNum,
+                    seconds: currentSeconds,
+                    _token: document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                }));
+            }
+        };
+    }, [comic.id, pageNum]);
 
     const goPage = (offset) => {
         const newPage = pageNum + offset;

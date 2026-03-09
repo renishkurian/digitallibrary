@@ -1,16 +1,109 @@
+import { useState, useEffect } from 'react';
 import { Link, Head } from '@inertiajs/react';
 import ComicLayout from '@/Layouts/ComicLayout';
 import ComicCard from '@/Components/ComicCard';
 import Pagination from '@/Components/Pagination';
 
-export default function Index({ comics, filters, auth, shelves, categories }) {
+export default function Index({ comics, filters, auth, shelves, categories, recentlyRead }) {
+    const [showSidebar, setShowSidebar] = useState(
+        typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
+    );
+
+    // Update default state on resize if needed
+    useEffect(() => {
+        const handleResize = () => {
+            if (window.innerWidth < 1024 && showSidebar) {
+                setShowSidebar(false);
+            }
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [showSidebar]);
+
     return (
         <ComicLayout auth={auth}>
             <Head title="All Comics" />
 
-            <div className="flex flex-col lg:flex-row gap-10">
+            {/* View Controls & Stats Headers */}
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4 border-b border-white/10 pb-4">
+                <div className="flex items-center gap-4">
+                    <button 
+                        onClick={() => setShowSidebar(!showSidebar)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-[12px] tracking-wider transition-colors border ${showSidebar ? 'bg-[#e8003d] text-white border-[#e8003d]' : 'bg-transparent text-[#8888a0] border-white/20 hover:text-white hover:border-white/50'}`}
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="4" y1="21" x2="4" y2="14"></line>
+                            <line x1="4" y1="10" x2="4" y2="3"></line>
+                            <line x1="12" y1="21" x2="12" y2="12"></line>
+                            <line x1="12" y1="8" x2="12" y2="3"></line>
+                            <line x1="20" y1="21" x2="20" y2="16"></line>
+                            <line x1="20" y1="12" x2="20" y2="3"></line>
+                            <line x1="1" y1="14" x2="7" y2="14"></line>
+                            <line x1="9" y1="8" x2="15" y2="8"></line>
+                            <line x1="17" y1="16" x2="23" y2="16"></line>
+                        </svg>
+                        FILTERS
+                    </button>
+                    <h2 className="font-['Bebas_Neue'] text-[32px] tracking-[2px] uppercase text-white m-0 leading-none">
+                        Library <span className="text-[#e8003d] ml-1">Archive</span>
+                    </h2>
+                </div>
+                <div className="flex items-center gap-4">
+                    <span className="text-[14px] font-['Bebas_Neue'] tracking-[2px] text-white">
+                        <span className="text-[20px] text-[#e8003d] mr-1">{comics.total}</span> COMICS
+                    </span>
+                    <span className="text-[14px] font-['Bebas_Neue'] tracking-[2px] text-[#8888a0] border-l border-white/20 pl-4">
+                        <span className="text-[20px] text-white mr-1">{comics.last_page}</span> PAGES
+                    </span>
+                </div>
+            </div>
+
+            {recentlyRead && recentlyRead.length > 0 && (
+                <div className="mb-12 animate-fadeIn">
+                    <div className="flex items-center justify-between mb-5">
+                        <div className="flex items-center gap-3">
+                            <div className="w-1.5 h-6 bg-[#e8003d] rounded-full shadow-[0_0_12px_rgba(232,0,61,0.5)]"></div>
+                            <h3 className="text-[14px] font-['Bebas_Neue'] tracking-[3px] uppercase text-white/90">Recently Read</h3>
+                        </div>
+                        <Link 
+                            href={route('comics.index', { status: 'history' })}
+                            className="text-[11px] font-bold text-[#8888a0] hover:text-white transition-colors tracking-widest uppercase"
+                        >
+                            View All History →
+                        </Link>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                        {recentlyRead.map(comic => (
+                            <Link 
+                                key={comic.id} 
+                                href={route('comics.show', comic.id)}
+                                className="group flex flex-col gap-2.5"
+                            >
+                                <div className="relative aspect-[3/4] rounded-xl overflow-hidden border border-white/7 transition-all group-hover:border-white/20 group-hover:scale-[1.03] shadow-lg">
+                                    <img 
+                                        src={comic.thumbnail ? `/thumbnails/${comic.thumbnail}` : '/img/no-thumb.jpg'} 
+                                        alt={comic.title}
+                                        className="w-full h-full object-cover"
+                                    />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
+                                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Resume →</span>
+                                    </div>
+                                    <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-md border border-white/10 rounded px-1.5 py-0.5 text-[9px] font-bold text-white/90">
+                                        PG {comic.last_read_page}
+                                    </div>
+                                </div>
+                                <span className="text-[11px] font-bold text-[#a0a0b8] group-hover:text-white transition-colors truncate px-1">
+                                    {comic.title}
+                                </span>
+                            </Link>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            <div className={`flex flex-col lg:flex-row gap-10 transition-all duration-300`}>
                 {/* Sidebar Filters */}
-                <aside className="w-full lg:w-64 flex flex-col gap-8 shrink-0">
+                <aside className={`w-full lg:w-64 flex flex-col gap-8 shrink-0 transition-all duration-300 origin-left ${showSidebar ? 'opacity-100 translate-x-0' : 'hidden opacity-0 -translate-x-full'}`}>
                     <div className="flex flex-col gap-4">
                         <h3 className="text-[11px] tracking-[3px] uppercase font-black text-[#55556a]">Status</h3>
                         <div className="flex flex-wrap gap-2">
@@ -38,6 +131,54 @@ export default function Index({ comics, filters, auth, shelves, categories }) {
                             )}
                         </div>
                     </div>
+
+                    {auth.user && (
+                        <div className="flex flex-col gap-4">
+                            <h3 className="text-[11px] tracking-[3px] uppercase font-black text-[#55556a]">My Library</h3>
+                            <div className="flex flex-col gap-1">
+                                <Link 
+                                    href={route('comics.index', { ...filters, personal: filters.personal ? null : 1, shared: null, hidden: null })}
+                                    className={`text-[13px] py-1.5 px-3 rounded-lg transition-all flex items-center justify-between ${filters.personal ? 'bg-blue-500/10 text-blue-400 font-bold' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                        Personal Items
+                                    </span>
+                                    {filters.personal && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><polyline points="20 6 9 17 4 12" /></svg>}
+                                </Link>
+                                <Link 
+                                    href={route('comics.index', { ...filters, shared: filters.shared ? null : 1, personal: null, hidden: null })}
+                                    className={`text-[13px] py-1.5 px-3 rounded-lg transition-all flex items-center justify-between ${filters.shared ? 'bg-purple-500/10 text-purple-400 font-bold' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                                        Shared With Me
+                                    </span>
+                                    {filters.shared && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><polyline points="20 6 9 17 4 12" /></svg>}
+                                </Link>
+                                <Link 
+                                    href={route('comics.index', { ...filters, hidden: filters.hidden ? null : 1, personal: null, shared: null })}
+                                    className={`text-[13px] py-1.5 px-3 rounded-lg transition-all flex items-center justify-between ${filters.hidden ? 'bg-[#e8003d]/10 text-[#e8003d] font-bold' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                                        Hidden Items
+                                    </span>
+                                    {filters.hidden && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><polyline points="20 6 9 17 4 12" /></svg>}
+                                </Link>
+                                <Link 
+                                    href={route('comics.index', { ...filters, status: filters.status === 'history' ? null : 'history' })}
+                                    className={`text-[13px] py-1.5 px-3 rounded-lg transition-all flex items-center justify-between ${filters.status === 'history' ? 'bg-[#e8003d]/10 text-[#e8003d] font-bold' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                        Reading History
+                                    </span>
+                                    {filters.status === 'history' && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><polyline points="20 6 9 17 4 12" /></svg>}
+                                </Link>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="flex flex-col gap-4">
                         <h3 className="text-[11px] tracking-[3px] uppercase font-black text-[#55556a]">Shelves</h3>
@@ -91,14 +232,7 @@ export default function Index({ comics, filters, auth, shelves, categories }) {
                 </aside>
 
                 {/* Comic Grid */}
-                <div className="flex-1">
-                    <div className="flex items-center justify-between mb-8">
-                        <h2 className="font-['Bebas_Neue'] text-[32px] tracking-[2px] uppercase text-white">
-                            Library <span className="text-[#e8003d] ml-1">Archive</span>
-                        </h2>
-                        <span className="text-[11px] tracking-widest text-[#55556a] font-bold">{comics.total} ITEMS FOUND</span>
-                    </div>
-
+                <div className="flex-1 transition-all duration-300 w-full min-w-0">
                     {comics.data.length === 0 ? (
                         <div className="text-center py-24 bg-white/[0.02] border border-white/5 rounded-3xl text-[#55556a]">
                             <svg className="w-16 h-16 mx-auto mb-4 opacity-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">

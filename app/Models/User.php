@@ -6,11 +6,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, HasRoles;
 
     /**
      * The attributes that are mass assignable.
@@ -22,11 +23,19 @@ class User extends Authenticatable
         'email',
         'password',
         'is_admin',
+        'last_login_at',
     ];
 
     public function readComics()
     {
-        return $this->belongsToMany(Comic::class, 'comic_user');
+        return $this->belongsToMany(Comic::class, 'comic_user')
+            ->withPivot('last_read_page')
+            ->withTimestamps();
+    }
+
+    public function sharedComics()
+    {
+        return $this->belongsToMany(Comic::class, 'comic_user_access');
     }
 
     /**
@@ -49,6 +58,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'last_login_at' => 'datetime',
         ];
     }
 }

@@ -38,6 +38,9 @@ export default function ComicLayout({ children, title }) {
                     <nav className="flex items-center gap-6 ml-4">
                         <Link href={route('comics.index')} className={`text-[13px] tracking-widest uppercase font-medium transition-colors ${route().current('comics.index') ? 'text-[#e8003d]' : 'text-[#8888a0] hover:text-white'}`}>Library</Link>
                         <Link href={route('shelves.index')} className={`text-[13px] tracking-widest uppercase font-medium transition-colors ${route().current('shelves.*') ? 'text-[#e8003d]' : 'text-[#8888a0] hover:text-white'}`}>Shelves</Link>
+                        {auth.user && (
+                            <Link href={route('reading-stats')} className={`text-[13px] tracking-widest uppercase font-medium transition-colors ${route().current('reading-stats') ? 'text-[#e8003d]' : 'text-[#8888a0] hover:text-white'}`}>Stats</Link>
+                        )}
                     </nav>
                 </div>
 
@@ -59,9 +62,9 @@ export default function ComicLayout({ children, title }) {
                     <div className="auth-links flex items-center gap-3">
                         {auth.user ? (
                             <>
-                                <Link href={route('dashboard')} className="auth-link text-[13px] text-[#8888a0] hover:text-white transition-colors">Dashboard</Link>
+                                <a href={route('dashboard')} className="auth-link text-[13px] text-[#8888a0] hover:text-white transition-colors">Dashboard</a>
                                 {auth.user.is_admin && (
-                                    <Link href={route('admin.comics.index')} className="auth-link text-[13px] text-[#8888a0] hover:text-white transition-colors">Admin</Link>
+                                    <a href={route('admin.comics.index')} className="auth-link text-[13px] text-[#8888a0] hover:text-white transition-colors">Admin</a>
                                 )}
                                 <Link 
                                     href={route('logout')} 
@@ -74,8 +77,8 @@ export default function ComicLayout({ children, title }) {
                             </>
                         ) : (
                             <>
-                                <Link href={route('login')} className="auth-link text-[13px] text-[#8888a0] hover:text-white transition-colors">Login</Link>
-                                <Link href={route('register')} className="auth-link text-[13px] text-[#8888a0] hover:text-white transition-colors">Register</Link>
+                                <a href={route('login')} className="auth-link text-[13px] text-[#8888a0] hover:text-white transition-colors">Login</a>
+                                <a href={route('register')} className="auth-link text-[13px] text-[#8888a0] hover:text-white transition-colors">Register</a>
                             </>
                         )}
                     </div>

@@ -13,9 +13,15 @@ export default function ComicCard({ comic, auth }) {
                 )}
 
                 <div className="card-overlay absolute inset-0 bg-gradient-to-t from-[#0a0a0f]/95 via-transparent to-transparent flex flex-col justify-end p-[15px]">
-                    <div className="card-title text-[14px] font-medium text-white mb-[5px] whitespace-nowrap overflow-hidden text-ellipsis">
+                    <div className="flex-1 min-w-0">
+                    <h3 className="text-white font-bold group-hover/card:text-[#e8003d] transition-colors leading-tight truncate px-1 flex items-center gap-2">
                         {comic.title}
-                    </div>
+                        {comic.is_personal && <span className="text-[9px] bg-blue-500/10 text-blue-400 px-1 py-0.5 rounded border border-blue-500/20 uppercase tracking-tighter shrink-0">Personal</span>}
+                    </h3>
+                    <p className="text-[#55556a] text-[11px] font-medium tracking-wide mt-1 uppercase px-1">
+                        {comic.readers_count} {comic.readers_count === 1 ? 'Reader' : 'Readers'}
+                    </p>
+                </div>
                     <div className="card-meta flex justify-between items-center">
                         {auth.user && (
                             comic.is_read ? (

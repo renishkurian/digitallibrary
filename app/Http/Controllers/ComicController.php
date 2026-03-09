@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use App\Models\Comic;
 use App\Models\Shelf;
 use App\Models\Category;
+use App\Models\User;
+use App\Models\ReadingLog;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
@@ -28,13 +30,20 @@ class ComicController extends Controller
             $query->search($request->q);
         }
 
-        // Read/Unread Filters (only for logged in users)
+        // Read/Unread/History Filters (only for logged in users)
         if (Auth::check() && $request->filled('status')) {
             $userId = Auth::id();
-            if ($request->status === 'read') {
+            if ($request->status === 'read' || $request->status === 'history') {
                 $query->whereHas('readers', function ($q) use ($userId) {
                     $q->where('user_id', $userId);
                 });
+
+                if ($request->status === 'history') {
+                    $query->join('comic_user', 'comics.id', '=', 'comic_user.comic_id')
+                        ->where('comic_user.user_id', $userId)
+                        ->orderByDesc('comic_user.updated_at')
+                        ->select('comics.*');
+                }
             } elseif ($request->status === 'unread') {
                 $query->whereDoesntHave('readers', function ($q) use ($userId) {
                     $q->where('user_id', $userId);
@@ -55,8 +64,27 @@ class ComicController extends Controller
             });
         }
 
-        $comics = $query->latest()
-            ->paginate(28)
+        // My Library Filters (only for logged in users)
+        if (Auth::check()) {
+            $userId = Auth::id();
+            if ($request->filled('personal')) {
+                $query->where('user_id', $userId)->where('is_personal', true);
+            }
+            if ($request->filled('shared')) {
+                $query->whereHas('sharedWith', function ($q) use ($userId) {
+                    $q->where('user_id', $userId);
+                });
+            }
+            if ($request->filled('hidden')) {
+                $query->where('is_hidden', true);
+            }
+        }
+
+        if (!$request->filled('status') || $request->status !== 'history') {
+            $query->latest();
+        }
+
+        $comics = $query->paginate(30)
             ->withQueryString()
             ->through(fn($comic) => [
                 'id' => $comic->id,
@@ -64,12 +92,29 @@ class ComicController extends Controller
                 'thumbnail' => $comic->thumbnail,
                 'is_read' => Auth::check() ? $comic->isReadBy(Auth::user()) : false,
                 'is_hidden' => (bool) $comic->is_hidden,
+                'is_personal' => (bool) $comic->is_personal,
+                'user_id' => $comic->user_id,
                 'readers_count' => $comic->readers_count,
             ]);
 
+        $recentlyRead = [];
+        if (Auth::check() && !$request->filled('status') && !$request->filled('shelf') && !$request->filled('category') && !$request->filled('q')) {
+            $recentlyRead = Auth::user()->readComics()
+                ->latest('comic_user.updated_at')
+                ->take(6)
+                ->get()
+                ->map(fn($c) => [
+                    'id' => $c->id,
+                    'title' => $c->title,
+                    'thumbnail' => $c->thumbnail,
+                    'last_read_page' => $c->pivot->last_read_page,
+                ]);
+        }
+
         return Inertia::render('Comics/Index', [
             'comics' => $comics,
-            'filters' => $request->only(['q', 'status', 'shelf', 'category']),
+            'recentlyRead' => $recentlyRead,
+            'filters' => $request->only(['q', 'status', 'shelf', 'category', 'personal', 'shared', 'hidden']),
             'shelves' => Shelf::visible()->orderBy('sort_order')->get(),
             'categories' => Category::whereNull('parent_id')->with('children')->orderBy('sort_order')->get(),
         ]);
@@ -83,15 +128,36 @@ class ComicController extends Controller
 
         $comic->loadCount('readers');
 
+        $lastReadPage = 1;
+        if (Auth::check()) {
+            $reader = $comic->readers()->where('user_id', Auth::id())->first();
+            if ($reader) {
+                $lastReadPage = $reader->pivot->last_read_page ?? 1;
+            }
+        }
+
         return Inertia::render('Comics/Show', [
-            'comic' => $comic
+            'comic' => $comic,
+            'last_read_page' => $lastReadPage,
         ]);
     }
 
     public function serve(Comic $comic)
     {
-        if ($comic->is_hidden && (!Auth::check() || !Auth::user()->is_admin)) {
-            abort(403);
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user();
+
+        if ($comic->is_hidden || $comic->is_personal) {
+            $isAdmin      = $user && $user->hasRole('admin');
+            $isUploader   = $user && $user->id === $comic->user_id;
+            $isShared     = $user && $comic->sharedWith()->where('user_id', $user->id)->exists();
+
+            if (!$isAdmin && !$isUploader && !$isShared) {
+                // If it's a personal PDF, ONLY the uploader/admin can see it
+                // is_personal takes precedence over sharing in terms of policy? 
+                // Actually, if it's personal, uploader probably doesn't want to share it, but shared users could see it if uploader explicitly shared it.
+                abort(403);
+            }
         }
 
         $baseDir = rtrim(config('comics.base_dir'), '/');
@@ -124,17 +190,62 @@ class ComicController extends Controller
         return back();
     }
 
-    // Admin Methods
-    public function adminIndex()
+    public function updateLastReadPage(Request $request, Comic $comic)
     {
-        $comics = Comic::with('shelf', 'categories')->withCount('readers')->latest()
-            ->paginate(50)
-            ->withQueryString();
+        $request->validate([
+            'page' => 'required|integer|min:1',
+        ]);
+
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+
+        // Ensure the record exists in the pivot table
+        if (!$user->readComics()->where('comic_id', $comic->id)->exists()) {
+            $user->readComics()->attach($comic->id);
+        }
+
+        $user->readComics()->updateExistingPivot($comic->id, [
+            'last_read_page' => $request->page,
+            'updated_at' => now(), // Force update timestamp
+        ]);
+
+        return response()->json(['success' => true]);
+    }
+
+    // Admin Methods
+    public function adminIndex(Request $request)
+    {
+        $query = Comic::with('shelf', 'categories', 'sharedWith', 'uploader')->withCount('readers')->latest();
+
+        // Visibility filter
+        $visibility = $request->get('visibility', 'all');
+        if ($visibility === 'public') {
+            $query->where('is_hidden', false);
+        } elseif ($visibility === 'hidden') {
+            $query->where('is_hidden', true);
+        }
+
+        $comics = $query->paginate(50)->withQueryString()->through(fn($comic) => [
+            'id'            => $comic->id,
+            'title'         => $comic->title,
+            'path'          => $comic->path,
+            'is_hidden'     => (bool) $comic->is_hidden,
+            'is_personal'   => (bool) $comic->is_personal,
+            'user_id'       => $comic->user_id,
+            'uploader'      => $comic->uploader ? ['name' => $comic->uploader->name] : null,
+            'shelf_id'      => $comic->shelf_id,
+            'shelf'         => $comic->shelf,
+            'categories'    => $comic->categories,
+            'readers_count' => $comic->readers_count,
+            'shared_with'   => $comic->sharedWith->map(fn($u) => ['id' => $u->id, 'name' => $u->name, 'email' => $u->email]),
+        ]);
 
         return Inertia::render('Admin/Comics/Index', [
-            'comics' => $comics,
-            'shelves' => Shelf::orderBy('sort_order')->get(),
+            'comics'     => $comics,
+            'shelves'    => Shelf::orderBy('sort_order')->get(),
             'categories' => Category::orderBy('sort_order')->get(),
+            'users'      => User::orderBy('name')->get(['id', 'name', 'email']),
+            'filters'    => ['visibility' => $visibility],
         ]);
     }
 
@@ -146,13 +257,26 @@ class ComicController extends Controller
             'category_ids' => 'nullable|array',
             'category_ids.*' => 'exists:categories,id',
             'is_hidden' => 'required|boolean',
+            'is_personal' => 'required|boolean',
+            'thumbnail' => 'nullable|image|max:2048',
         ]);
 
-        $comic->update([
+        $data = [
             'title' => $request->title,
             'shelf_id' => $request->shelf_id,
             'is_hidden' => $request->is_hidden,
-        ]);
+            'is_personal' => $request->is_personal,
+        ];
+
+        if ($request->hasFile('thumbnail')) {
+            $thumbFile = $request->file('thumbnail');
+            $thumbDir = config('comics.thumb_dir');
+            $thumbName = time() . '_' . $thumbFile->getClientOriginalName();
+            $thumbFile->move($thumbDir, $thumbName);
+            $data['thumbnail'] = $thumbName;
+        }
+
+        $comic->update($data);
 
         $comic->categories()->sync($request->category_ids ?? []);
 
@@ -169,6 +293,8 @@ class ComicController extends Controller
     {
         $request->validate([
             'comic' => 'required|file|mimes:pdf|max:102400', // 100MB limit
+            'is_personal' => 'nullable|boolean',
+            'thumbnail' => 'nullable|image|max:2048',
         ]);
 
         $file = $request->file('comic');
@@ -179,20 +305,98 @@ class ComicController extends Controller
         $path = $file->move($baseDir, $filename);
         $relativePath = str_replace($baseDir . '/', '', $path->getRealPath());
 
-        $comic = Comic::create([
+        $data = [
             'title' => pathinfo($filename, PATHINFO_FILENAME),
             'filename' => $filename,
             'path' => $relativePath,
-        ]);
+            'user_id' => Auth::id(),
+            'is_personal' => $request->boolean('is_personal'),
+        ];
 
-        // Trigger sync or manual thumb generation would go here
+        if ($request->hasFile('thumbnail')) {
+            $thumbFile = $request->file('thumbnail');
+            $thumbDir = config('comics.thumb_dir');
+            $thumbName = time() . '_' . $thumbFile->getClientOriginalName();
+            $thumbFile->move($thumbDir, $thumbName);
+            $data['thumbnail'] = $thumbName;
+        }
+
+        $comic = Comic::create($data);
+
+        // Generate thumbnail if not provided
+        if (!$request->hasFile('thumbnail')) {
+            if ($comic->generateThumbnail()) {
+                return back()->with('success', 'Comic uploaded and thumbnail generated successfully.');
+            }
+            return back()->with('success', 'Comic uploaded successfully, but thumbnail generation failed.');
+        }
 
         return back()->with('success', 'Comic uploaded successfully.');
+    }
+
+    public function regenerateThumbnail(Comic $comic)
+    {
+        if ($comic->generateThumbnail()) {
+            return back()->with('success', 'Thumbnail regenerated successfully.');
+        }
+
+        return back()->with('error', 'Failed to generate thumbnail. Check server logs or if pdftoppm is installed.');
     }
 
     public function sync()
     {
         \Illuminate\Support\Facades\Artisan::call('app:sync-comics');
         return back()->with('success', 'Sync completed.');
+    }
+
+    public function shareWith(Request $request, Comic $comic)
+    {
+        $request->validate(['user_id' => 'required|exists:users,id']);
+        $comic->sharedWith()->syncWithoutDetaching([$request->user_id]);
+        return back()->with('success', 'Comic shared successfully.');
+    }
+
+    public function revokeShare(Comic $comic, User $user)
+    {
+        $comic->sharedWith()->detach($user->id);
+        return back()->with('success', 'Access revoked.');
+    }
+
+    public function syncReadingTime(Request $request, Comic $comic)
+    {
+        $request->validate([
+            'page' => 'nullable|integer|min:1',
+            'seconds' => 'required|integer|min:1',
+        ]);
+
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        $seconds = (int) $request->seconds;
+
+        // 1. Update comic_user pivot (Total Time & Last Page)
+        if (!$user->readComics()->where('comic_id', $comic->id)->exists()) {
+            $user->readComics()->attach($comic->id);
+        }
+
+        $pivotData = [
+            'total_seconds_spent' => \Illuminate\Support\Facades\DB::raw('total_seconds_spent + ' . $seconds),
+            'updated_at' => now(),
+        ];
+
+        if ($request->filled('page')) {
+            $pivotData['last_read_page'] = $request->page;
+        }
+
+        $user->readComics()->updateExistingPivot($comic->id, $pivotData);
+
+        // 2. Update/Create Daily Log
+        $today = now()->toDateString();
+        $log = ReadingLog::firstOrCreate(
+            ['user_id' => $user->id, 'comic_id' => $comic->id, 'date' => $today],
+            ['seconds_spent' => 0]
+        );
+        $log->increment('seconds_spent', $seconds);
+
+        return response()->json(['success' => true]);
     }
 }

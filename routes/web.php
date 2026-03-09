@@ -4,15 +4,15 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ComicController;
 use App\Http\Controllers\ShelfController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/dashboard', function () {
-    return view('dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::get('/', [ComicController::class, 'index'])->name('comics.index');
 Route::get('/comics/{comic}', [ComicController::class, 'show'])->name('comics.show');
@@ -26,8 +26,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::get('/reading-stats', [UserController::class, 'readingStats'])->name('reading-stats');
 
     Route::post('/comics/{comic}/read', [ComicController::class, 'toggleRead'])->name('comics.toggle-read');
+    Route::post('/comics/{comic}/page', [ComicController::class, 'updateLastReadPage'])->name('comics.update-page');
+    Route::post('/comics/{comic}/sync-time', [ComicController::class, 'syncReadingTime'])->name('comics.sync-time');
 
     // Admin Routes
     Route::middleware('admin')->prefix('admin')->name('admin.')->group(function () {
@@ -35,7 +38,16 @@ Route::middleware('auth')->group(function () {
         Route::post('/comics/{comic}/update', [ComicController::class, 'update'])->name('comics.update');
         Route::post('/comics/{comic}/visibility', [ComicController::class, 'toggleVisibility'])->name('comics.toggle-visibility');
         Route::post('/comics/upload', [ComicController::class, 'upload'])->name('comics.upload');
+        Route::post('/comics/{comic}/regenerate-thumbnail', [ComicController::class, 'regenerateThumbnail'])->name('comics.regenerate-thumbnail');
+        Route::post('/comics/{comic}/share', [ComicController::class, 'shareWith'])->name('comics.share');
+        Route::delete('/comics/{comic}/share/{user}', [ComicController::class, 'revokeShare'])->name('comics.revoke-share');
         Route::post('/comics/sync', [ComicController::class, 'sync'])->name('comics.sync');
+
+        // User Management
+        Route::get('/users', [UserController::class, 'index'])->name('users.index');
+        Route::post('/users/{user}/update', [UserController::class, 'update'])->name('users.update');
+        Route::post('/users/{user}/role', [UserController::class, 'assignRole'])->name('users.role');
+        Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
 
         // Shelf Management
         Route::get('/shelves', [ShelfController::class, 'adminIndex'])->name('shelves.index');

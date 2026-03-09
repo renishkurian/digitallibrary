@@ -44,6 +44,13 @@ class SyncComics extends Command
                 'thumbnail' => $this->getThumbnail($absolutePath, $thumbDir, $baseDir),
             ]);
             $comic->save();
+
+            if (!$comic->thumbnail) {
+                if ($comic->generateThumbnail()) {
+                    $this->info("Generated missing thumbnail for {$title}");
+                }
+            }
+
             $count++;
         }
 

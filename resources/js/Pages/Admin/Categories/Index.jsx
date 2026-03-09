@@ -59,7 +59,7 @@ export default function Index({ categories, parentCategories }) {
                                 type="text"
                                 value={data.name}
                                 onChange={e => setData('name', e.target.value)}
-                                className="bg-white/7 border border-white/10 text-white rounded-lg p-3 outline-none focus:border-[#e8003d] transition-colors"
+                                className="bg-[#0c0c12] border border-white/10 text-white rounded-lg p-3 outline-none focus:border-[#e8003d] transition-colors"
                                 placeholder="Category name"
                             />
                             {errors.name && <span className="text-[#e8003d] text-xs">{errors.name}</span>}
@@ -70,7 +70,7 @@ export default function Index({ categories, parentCategories }) {
                             <select 
                                 value={data.parent_id}
                                 onChange={e => setData('parent_id', e.target.value)}
-                                className="bg-white/7 border border-white/10 text-white rounded-lg p-3 outline-none focus:border-[#e8003d] transition-colors"
+                                className="bg-[#0c0c12] border border-white/10 text-white rounded-lg p-3 outline-none focus:border-[#e8003d] transition-colors"
                             >
                                 <option value="">No Parent (Top Level)</option>
                                 {parentCategories.map(parent => (
@@ -85,7 +85,7 @@ export default function Index({ categories, parentCategories }) {
                             <textarea 
                                 value={data.description}
                                 onChange={e => setData('description', e.target.value)}
-                                className="bg-white/7 border border-white/10 text-white rounded-lg p-3 h-24 outline-none focus:border-[#e8003d] transition-colors resize-none"
+                                className="bg-[#0c0c12] border border-white/10 text-white rounded-lg p-3 h-24 outline-none focus:border-[#e8003d] transition-colors resize-none"
                                 placeholder="Describe this category..."
                             />
                         </div>
