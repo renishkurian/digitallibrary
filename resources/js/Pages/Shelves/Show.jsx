@@ -9,7 +9,7 @@ export default function Show({ shelf, comics, auth }) {
             <Head title={`${shelf.name} - Shelf`} />
             
             <div className="flex flex-col gap-8">
-                <div className="shelf-header relative py-12 px-10 rounded-3xl overflow-hidden border border-white/7 bg-[#0d0d14]">
+                <div className="shelf-header relative py-8 px-4 sm:py-12 sm:px-10 rounded-2xl sm:rounded-3xl overflow-hidden border border-white/7 bg-[#0d0d14]">
                     <div className="relative z-10 max-w-2xl">
                         <Link 
                             href={route('shelves.index')}
@@ -20,7 +20,7 @@ export default function Show({ shelf, comics, auth }) {
                             </svg>
                             Back to Shelves
                         </Link>
-                        <h1 className="text-5xl font-['Bebas_Neue'] tracking-[4px] text-white">
+                        <h1 className="text-3xl sm:text-5xl font-['Bebas_Neue'] tracking-[2px] sm:tracking-[4px] text-white">
                             {shelf.name}
                         </h1>
                         <p className="text-[#8888a0] text-base mt-4 leading-relaxed font-light">

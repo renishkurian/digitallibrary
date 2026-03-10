@@ -57,7 +57,7 @@ body {
 }
 
 /* Pagination links styling for a premium look */
-.pagination a, 
+.pagination a,
 .pagination span {
     color: var(--muted);
     text-decoration: none;
@@ -72,4 +72,26 @@ body {
 .pagination span[aria-current="page"] {
     color: var(--text);
     font-weight: 500;
+}
+
+/* ── ANIMATIONS ── */
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-slideDown {
+    animation: slideDown 0.2s ease-out;
+}
+
+/* ── MOBILE READER ── */
+.cv-scroll {
+    touch-action: pan-y pinch-zoom;
 }

@@ -255,7 +255,7 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
                         </div>
                     ) : (
                         <>
-                            <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-6">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4 sm:gap-6">
                                 {comics.data.map(comic => (
                                     <ComicCard key={comic.id} comic={comic} auth={auth} />
                                 ))}

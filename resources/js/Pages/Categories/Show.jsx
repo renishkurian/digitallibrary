@@ -25,7 +25,7 @@ export default function Show({ category, comics, breadcrumbs, auth }) {
                         ))}
                     </nav>
                     
-                    <h1 className="text-4xl font-['Bebas_Neue'] tracking-[3px] text-white">
+                    <h1 className="text-2xl sm:text-4xl font-['Bebas_Neue'] tracking-[2px] sm:tracking-[3px] text-white">
                         Category: {category.name}
                     </h1>
                     {category.description && (

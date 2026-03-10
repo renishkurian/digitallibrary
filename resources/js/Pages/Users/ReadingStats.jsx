@@ -22,17 +22,17 @@ export default function ReadingStats({ auth, comicStats, dailyLogs }) {
         <ComicLayout auth={auth}>
             <Head title="Reading Stats & Logs" />
 
-            <div className="max-w-6xl mx-auto py-10 px-6">
-                <header className="mb-12 border-b border-white/10 pb-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <div className="max-w-6xl mx-auto py-6 sm:py-10 px-2 sm:px-6">
+                <header className="mb-8 sm:mb-12 border-b border-white/10 pb-6 sm:pb-8 flex flex-col md:flex-row md:items-end justify-between gap-4 sm:gap-6">
                     <div>
-                        <h1 className="font-['Bebas_Neue'] text-[48px] tracking-[3px] uppercase text-white leading-none mb-2">
+                        <h1 className="font-['Bebas_Neue'] text-[32px] sm:text-[48px] tracking-[2px] sm:tracking-[3px] uppercase text-white leading-none mb-2">
                             Reading <span className="text-[#e8003d]">Analytics</span>
                         </h1>
                         <p className="text-[#8888a0] text-[14px] font-medium tracking-wide">
                             Track your journey through the digital archives
                         </p>
                     </div>
-                    <div className="flex items-center gap-8">
+                    <div className="flex items-center gap-4 sm:gap-8">
                         <div className="flex flex-col items-end">
                             <span className="text-[11px] font-black text-[#55556a] uppercase tracking-[2px] mb-1">Total Time Spent</span>
                             <span className="text-[24px] font-['Bebas_Neue'] text-white tracking-[1px]">{formatTime(totalSeconds)}</span>

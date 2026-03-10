@@ -19,12 +19,12 @@ export default function Dashboard({ auth, stats, recentComics }) {
             <div className="max-w-7xl mx-auto flex flex-col gap-10">
 
                 {/* Hero Welcome */}
-                <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-[#0d0d14] to-[#1a0a0f] border border-white/7 p-10">
+                <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden bg-gradient-to-r from-[#0d0d14] to-[#1a0a0f] border border-white/7 p-5 sm:p-10">
                     <div className="absolute inset-0 bg-[url('/pattern.svg')] opacity-5" />
                     <div className="absolute top-0 right-0 w-80 h-80 bg-[#e8003d] rounded-full blur-[120px] opacity-10 translate-x-1/2 -translate-y-1/2" />
                     <div className="relative">
                         <p className="text-[#e8003d] text-[12px] uppercase tracking-[4px] font-black mb-2">Admin Panel</p>
-                        <h1 className="font-['Bebas_Neue'] text-6xl tracking-[4px] text-white mb-3">
+                        <h1 className="font-['Bebas_Neue'] text-3xl sm:text-6xl tracking-[2px] sm:tracking-[4px] text-white mb-3">
                             Welcome back, <span className="text-[#e8003d]">{auth?.user?.name?.split(' ')[0]}</span>
                         </h1>
                         <p className="text-[#8888a0] max-w-lg">Your library is running. Manage your comic collection, users and settings from this panel.</p>
@@ -51,7 +51,7 @@ export default function Dashboard({ auth, stats, recentComics }) {
                 </div>
 
                 {/* Quick Actions */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-5">
                     {[
                         { href: route('admin.comics.index'), icon: '📚', title: 'Manage Comics', desc: 'Upload, edit, hide/show, and share comics' },
                         { href: route('admin.users.index'), icon: '👥', title: 'Manage Users', desc: 'Assign roles, edit profiles, delete accounts' },
