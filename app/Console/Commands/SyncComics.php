@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
+use App\Services\LoggingService;
 
 class SyncComics extends Command
 {
@@ -104,6 +105,14 @@ class SyncComics extends Command
         }
 
         $this->info("Scan completed. Total: $count, New: $new, Updated: $updated, Removed: $deleted.");
+
+        LoggingService::info("Comic library sync completed", [
+            'total' => $count,
+            'new' => $new,
+            'updated' => $updated,
+            'removed' => $deleted,
+            'base_dir' => $baseDir
+        ]);
     }
 
     protected function cleanTitle($name)

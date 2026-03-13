@@ -96,6 +96,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/duplicates', [App\Http\Controllers\Admin\DuplicateController::class, 'index'])->name('duplicates.index');
         Route::post('/duplicates/bulk-delete', [App\Http\Controllers\Admin\DuplicateController::class, 'bulkDestroy'])->name('duplicates.bulk-delete');
         Route::delete('/duplicates/{comic}', [App\Http\Controllers\Admin\DuplicateController::class, 'destroy'])->name('duplicates.destroy');
+
+        // Logs
+        Route::get('/logs', [App\Http\Controllers\Admin\LogController::class, 'index'])->name('logs.index');
     });
 });
 

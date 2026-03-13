@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use App\Services\LoggingService;
 
 class DuplicateController extends Controller
 {
@@ -92,9 +93,23 @@ class DuplicateController extends Controller
         $baseDir = config('comics.base_dir');
         $fullPath = $baseDir . '/' . ltrim($comic->path, '/');
 
+        LoggingService::info("Attempting to delete duplicate file", [
+            'id' => $comic->id,
+            'path' => $comic->path,
+            'fullPath' => $fullPath,
+            'exists' => File::exists($fullPath)
+        ]);
+
         // 1. Delete physical file
         if (File::exists($fullPath)) {
-            File::delete($fullPath);
+            $success = File::delete($fullPath);
+            if (!$success) {
+                LoggingService::error("Failed to delete physical file", ['path' => $fullPath]);
+            } else {
+                LoggingService::info("Physical file deleted successfully", ['path' => $fullPath]);
+            }
+        } else {
+            LoggingService::warning("Physical file does not exist during deletion attempt", ['path' => $fullPath]);
         }
 
         // 2. Delete database record
@@ -118,9 +133,18 @@ class DuplicateController extends Controller
         foreach ($comics as $comic) {
             $fullPath = $baseDir . '/' . ltrim($comic->path, '/');
 
+            LoggingService::info("Bulk deleting duplicate file", [
+                'id' => $comic->id,
+                'fullPath' => $fullPath,
+                'exists' => File::exists($fullPath)
+            ]);
+
             // Delete physical file
             if (File::exists($fullPath)) {
-                File::delete($fullPath);
+                $success = File::delete($fullPath);
+                if (!$success) {
+                    LoggingService::error("Failed to bulk delete physical file", ['path' => $fullPath]);
+                }
             }
 
             // Delete database record
