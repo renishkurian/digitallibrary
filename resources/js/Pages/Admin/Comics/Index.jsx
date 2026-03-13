@@ -228,6 +228,9 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                         <Link href={route('admin.duplicates.index')} className="bg-blue-500/10 border border-blue-500/20 text-[#60a5fa] px-5 py-2 rounded-lg text-xs uppercase tracking-widest font-bold hover:bg-blue-500/20 transition-colors flex items-center gap-2">
                             🔍 Duplicates
                         </Link>
+                        <Link href={route('admin.logs.index')} className="bg-purple-500/10 border border-purple-500/20 text-[#c084fc] px-5 py-2 rounded-lg text-xs uppercase tracking-widest font-bold hover:bg-purple-500/20 transition-colors flex items-center gap-2">
+                            📜 Activity
+                        </Link>
                     </div>
                 </div>
 
