@@ -27,7 +27,7 @@ class SyncComics extends Command
         $this->info("Scanning $baseDir...");
 
         // Pre-fetch all existing comic paths to avoid N+1 queries
-        $existingComics = \App\Models\Comic::all(['id', 'path', 'title', 'filename', 'thumbnail'])->keyBy('path');
+        $existingComics = \App\Models\Comic::all(['id', 'path', 'title', 'filename', 'thumbnail', 'md5_hash'])->keyBy('path');
 
         $files = \Illuminate\Support\Facades\File::allFiles($baseDir);
         $count = 0;
@@ -41,6 +41,7 @@ class SyncComics extends Command
             $relativePath = str_replace($baseDir . '/', '', $absolutePath);
             $filename = $file->getFilename();
             $title = $this->cleanTitle($file->getFilenameWithoutExtension());
+            $md5Hash = \App\Models\Comic::getPartialHash($absolutePath);
 
             // Check if comic exists in our pre-fetched map
             $comic = $existingComics->get($relativePath);
@@ -56,6 +57,7 @@ class SyncComics extends Command
             $comic->fill([
                 'title' => $title,
                 'filename' => $filename,
+                'md5_hash' => $md5Hash,
             ]);
 
             // 1. If we have a thumbnail in DB, verify it exists. If not, mark as null to re-search.
@@ -65,7 +67,7 @@ class SyncComics extends Command
 
             // 2. Search for existing thumbnail (Name then MD5)
             if (!$comic->thumbnail) {
-                $comic->thumbnail = $this->getThumbnail($absolutePath, $thumbDir, $baseDir);
+                $comic->thumbnail = $this->getThumbnail($absolutePath, $thumbDir, $baseDir, $md5Hash);
             }
 
             // Only save if dirty
@@ -101,7 +103,7 @@ class SyncComics extends Command
         return trim($name);
     }
 
-    protected function getThumbnail($pdfPath, $thumbDir, $baseDir)
+    protected function getThumbnail($pdfPath, $thumbDir, $baseDir, $md5Hash = null)
     {
         $basename = pathinfo($pdfPath, PATHINFO_BASENAME);
         $filename = pathinfo($pdfPath, PATHINFO_FILENAME);
@@ -117,17 +119,6 @@ class SyncComics extends Command
         ];
 
         foreach ($patterns as $pattern) {
-            if (file_exists($thumbDir . "/" . $pattern)) return $pattern;
-        }
-
-        $md5 = md5($pdfPath);
-        $md5Patterns = [
-            $md5 . ".png",
-            $md5 . ".jpg",
-            $md5 . ".jpeg",
-        ];
-
-        foreach ($md5Patterns as $pattern) {
             if (file_exists($thumbDir . "/" . $pattern)) return $pattern;
         }
 

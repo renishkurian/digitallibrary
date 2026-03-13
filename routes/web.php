@@ -91,6 +91,11 @@ Route::middleware('auth')->group(function () {
         // AI Playground
         Route::get('/ai-playground', [App\Http\Controllers\Admin\AiPlaygroundController::class, 'index'])->name('ai-playground.index');
         Route::post('/ai-playground/query', [App\Http\Controllers\Admin\AiPlaygroundController::class, 'query'])->name('ai-playground.query');
+
+        // Duplicates
+        Route::get('/duplicates', [App\Http\Controllers\Admin\DuplicateController::class, 'index'])->name('duplicates.index');
+        Route::post('/duplicates/bulk-delete', [App\Http\Controllers\Admin\DuplicateController::class, 'bulkDestroy'])->name('duplicates.bulk-delete');
+        Route::delete('/duplicates/{comic}', [App\Http\Controllers\Admin\DuplicateController::class, 'destroy'])->name('duplicates.destroy');
     });
 });
 

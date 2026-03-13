@@ -225,6 +225,9 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                         <Link href={route('admin.categories.index')} className="bg-white/5 border border-white/10 text-white px-5 py-2 rounded-lg text-xs uppercase tracking-widest font-bold hover:bg-white/10 transition-colors">
                             Categories
                         </Link>
+                        <Link href={route('admin.duplicates.index')} className="bg-blue-500/10 border border-blue-500/20 text-[#60a5fa] px-5 py-2 rounded-lg text-xs uppercase tracking-widest font-bold hover:bg-blue-500/20 transition-colors flex items-center gap-2">
+                            🔍 Duplicates
+                        </Link>
                     </div>
                 </div>
 

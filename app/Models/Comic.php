@@ -20,6 +20,7 @@ class Comic extends Model
         'ai_summary',
         'rating',
         'tags',
+        'md5_hash',
     ];
 
     protected $appends = ['encrypted_id', 'share_url'];
@@ -135,6 +136,25 @@ class Comic extends Model
         return $this->readers()->where('user_id', $user->id)->exists();
     }
 
+    /**
+     * Generate a fingerprint using the first 1MB of the file and the total file size.
+     * This helps detect duplicates that have identical content but different metadata/trailers.
+     */
+    public static function getPartialHash($path)
+    {
+        if (!file_exists($path)) return null;
+
+        $size = filesize($path);
+        $handle = fopen($path, 'rb');
+        if (!$handle) return null;
+
+        // Read first 1MB
+        $data = fread($handle, 1024 * 1024);
+        fclose($handle);
+
+        return md5($data) . ':' . $size;
+    }
+
     public function generateThumbnail()
     {
         $baseDir = rtrim(config('comics.base_dir'), '/');
@@ -170,23 +190,12 @@ class Comic extends Model
             }
         }
 
-        // 2. Try MD5-based variants (second priority)
-        $md5 = md5($absolutePdfPath);
-        $md5Patterns = [
-            $md5 . ".png",
-            $md5 . ".jpg",
-            $md5 . ".jpeg",
-        ];
+        // 2. Update MD5 hash for duplicate detection (don't use for naming)
+        $contentMd5 = self::getPartialHash($absolutePdfPath);
+        $this->update(['md5_hash' => $contentMd5]);
 
-        foreach ($md5Patterns as $pattern) {
-            if (file_exists($thumbDir . "/" . $pattern)) {
-                $this->update(['thumbnail' => $pattern]);
-                return true;
-            }
-        }
-
-        // 3. Generate if neither exists
-        $tempPrefix = $thumbDir . '/' . $md5;
+        // 3. Generate if it doesn't exist
+        $tempPrefix = $thumbDir . '/' . uniqid('thumb_');
         $pdfPathEscaped = escapeshellarg($absolutePdfPath);
         $tempPrefixEscaped = escapeshellarg($tempPrefix);
 
@@ -195,7 +204,7 @@ class Comic extends Model
         exec($command, $output, $returnVar);
 
         $generatedFiles = glob($tempPrefix . "-*.png");
-        $finalFile = $md5 . ".png";
+        $finalFile = $filename . ".png";
 
         if ($returnVar === 0 && !empty($generatedFiles)) {
             $generatedFile = $generatedFiles[0];

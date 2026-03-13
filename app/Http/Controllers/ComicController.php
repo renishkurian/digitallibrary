@@ -241,6 +241,15 @@ class ComicController extends Controller
             $query->where('is_approved', false)->where('is_personal', false);
         }
 
+        // Search filter
+        if ($search = $request->get('q')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                    ->orWhere('path', 'like', "%{$search}%")
+                    ->orWhere('filename', 'like', "%{$search}%");
+            });
+        }
+
         // Visibility filter
         $visibility = $request->get('visibility', 'all');
         if ($visibility === 'public') {
