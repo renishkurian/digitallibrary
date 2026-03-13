@@ -33,6 +33,7 @@ class SyncComics extends Command
         $count = 0;
         $updated = 0;
         $new = 0;
+        $processedPaths = [];
 
         foreach ($files as $file) {
             if ($file->getExtension() !== 'pdf') continue;
@@ -90,10 +91,19 @@ class SyncComics extends Command
                 }
             }
 
+            $processedPaths[$relativePath] = true;
             $count++;
         }
 
-        $this->info("Scan completed. Total: $count, New: $new, Updated: $updated.");
+        // Cleanup: Remove records from database if file is no longer on disk
+        $orphans = $existingComics->diffKeys($processedPaths);
+        $deleted = $orphans->count();
+
+        foreach ($orphans as $orphan) {
+            $orphan->delete();
+        }
+
+        $this->info("Scan completed. Total: $count, New: $new, Updated: $updated, Removed: $deleted.");
     }
 
     protected function cleanTitle($name)
