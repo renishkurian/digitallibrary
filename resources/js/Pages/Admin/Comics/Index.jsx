@@ -4,732 +4,634 @@ import ComicLayout from '@/Layouts/ComicLayout';
 import Pagination from '@/Components/Pagination';
 import ConfirmModal from '@/Components/ConfirmModal';
 
-export default function Index({ comics, auth, shelves, categories, users, roles, filters }) {
-    const [editingComic, setEditingComic] = useState(null);
-    const [sharingComic, setSharingComic] = useState(null);
-    const [shareUserId, setShareUserId]   = useState('');
-    const [selectedIds, setSelectedIds]   = useState([]);
-    const [bulkShelfId, setBulkShelfId]   = useState('');
-    const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, confirmText: 'Confirm', confirmStyle: 'danger' });
-    const [syncStatus, setSyncStatus] = useState({ status: 'idle', progress: '', error: null, last_sync_at: null });
+// ─── tiny icon helpers ────────────────────────────────────────────────────────
+const Icon = ({ d, size = 14, stroke = 2.5 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke}>
+        <path d={d} />
+    </svg>
+);
+const CheckIcon   = () => <Icon d="M20 6 9 17 4 12" />;
+const EditIcon    = () => <Icon d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />;
+const EyeIcon     = () => <Icon d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0" />;
+const EyeOffIcon  = () => <Icon d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24 M1 1l22 22" />;
+const ShareIcon   = () => <Icon d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13" />;
+const XIcon       = ({ size = 14 }) => <Icon d="M18 6 6 18M6 6l12 12" size={size} stroke={2.5} />;
+const SearchIcon  = () => <Icon d="M21 21l-4.35-4.35 M11 19A8 8 0 1 0 11 3a8 8 0 0 0 0 16z" stroke={2.5} />;
 
-    // Poll for sync status if running
+// ─── reusable checkbox ────────────────────────────────────────────────────────
+function Checkbox({ checked, onChange, color = '#e8003d' }) {
+    return (
+        <div
+            onClick={onChange}
+            className="w-[18px] h-[18px] rounded-[4px] border flex items-center justify-center cursor-pointer transition-all flex-shrink-0"
+            style={{
+                background: checked ? color : 'transparent',
+                borderColor: checked ? color : 'rgba(255,255,255,0.2)',
+            }}
+        >
+            {checked && (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4">
+                    <polyline points="20 6 9 17 4 12" />
+                </svg>
+            )}
+        </div>
+    );
+}
+
+// ─── status pill ──────────────────────────────────────────────────────────────
+function StatusPill({ comic }) {
+    if (comic.is_hidden) return (
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" /> Hidden
+        </span>
+    );
+    if (!comic.is_approved && !comic.is_personal) return (
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" /> Pending
+        </span>
+    );
+    return (
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" /> Public
+        </span>
+    );
+}
+
+// ─── action button ────────────────────────────────────────────────────────────
+function ActionBtn({ onClick, title, children, variant = 'ghost' }) {
+    const base = "w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150 cursor-pointer flex-shrink-0";
+    const variants = {
+        ghost:   "bg-white/5 text-[#8888a0] hover:bg-white/12 hover:text-white border border-transparent hover:border-white/10",
+        green:   "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white border border-emerald-500/20",
+        blue:    "bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white border border-blue-500/20",
+        purple:  "bg-purple-500/10 text-purple-400 hover:bg-purple-500 hover:text-white border border-purple-500/20",
+        red:     "bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border border-red-500/20",
+        accent:  "bg-[#e8003d]/10 text-[#e8003d] hover:bg-[#e8003d] hover:text-white border border-[#e8003d]/20",
+    };
+    return (
+        <button onClick={onClick} title={title} className={`${base} ${variants[variant]}`}>
+            {children}
+        </button>
+    );
+}
+
+// ─── main component ───────────────────────────────────────────────────────────
+export default function Index({ comics, auth, shelves, categories, users, roles, filters }) {
+    const [editingComic, setEditingComic]   = useState(null);
+    const [sharingComic, setSharingComic]   = useState(null);
+    const [shareUserId, setShareUserId]     = useState('');
+    const [selectedIds, setSelectedIds]     = useState([]);
+    const [bulkShelfId, setBulkShelfId]     = useState('');
+    const [searchQuery, setSearchQuery]     = useState(filters.q || '');
+    const [confirmConfig, setConfirmConfig] = useState({ isOpen: false });
+    const [syncStatus, setSyncStatus]       = useState({ status: 'idle', progress: '', error: null, last_sync_at: null });
+    const [uploadPanelOpen, setUploadPanelOpen] = useState(false);
+
     useEffect(() => {
         let interval;
-        const checkStatus = () => {
-            fetch(route('admin.comics.sync-status'))
-                .then(res => res.json())
-                .then(data => {
-                    setSyncStatus(data);
-                    if (data.status !== 'running') {
-                        clearInterval(interval);
-                    }
-                });
-        };
-
-        if (syncStatus.status === 'running') {
-            interval = setInterval(checkStatus, 3000);
-        } else {
-            // Check once on load
-            checkStatus();
-        }
-
+        const check = () => fetch(route('admin.comics.sync-status')).then(r => r.json()).then(d => {
+            setSyncStatus(d);
+            if (d.status !== 'running') clearInterval(interval);
+        });
+        if (syncStatus.status === 'running') interval = setInterval(check, 3000);
+        else check();
         return () => clearInterval(interval);
     }, [syncStatus.status]);
 
-    const requestConfirm = (options) => setConfirmConfig({ ...options, isOpen: true });
-    const closeConfirm = () => setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+    const requestConfirm = (opts) => setConfirmConfig({ ...opts, isOpen: true });
+    const closeConfirm   = () => setConfirmConfig(p => ({ ...p, isOpen: false }));
 
-    const { data: uploadData, setData: setUploadData, post: postUpload, processing: uploading, errors: uploadErrors, reset: resetUpload } = useForm({ 
-        comic: null, 
-        is_personal: false,
-        generate_ai: true,
-        thumbnail: null, shelf_ids: [] 
+    const { data: uploadData, setData: setUploadData, post: postUpload, processing: uploading, errors: uploadErrors, reset: resetUpload } = useForm({
+        comic: null, is_personal: false, generate_ai: true, thumbnail: null, shelf_ids: []
     });
     const { data: editData, setData: setEditData, post: postUpdate, processing: updating, errors: editErrors, reset: resetEdit } = useForm({
         title: '', shelf_ids: [], category_ids: [], is_hidden: false, is_personal: false, is_approved: false, thumbnail: null
     });
     const { post: syncPost, processing: syncProcessing } = useForm();
 
-    const currentVisibility = filters?.visibility || 'all';
-
     const submitUpload = (e) => {
         e.preventDefault();
-        postUpload(route('admin.comics.upload'), { onSuccess: () => resetUpload('comic') });
+        postUpload(route('admin.comics.upload'), { onSuccess: () => { resetUpload('comic'); setUploadPanelOpen(false); } });
     };
 
-    const runSync = () => {
-        syncPost(route('admin.comics.sync'), {
-            onSuccess: () => setSyncStatus(prev => ({ ...prev, status: 'running' }))
-        });
-    };
+    const runSync = () => syncPost(route('admin.comics.sync'), {
+        onSuccess: () => setSyncStatus(p => ({ ...p, status: 'running' }))
+    });
 
     const handleEdit = (comic) => {
         setEditingComic(comic);
-        setEditData({
-            title:        comic.title,
-            shelf_ids:    comic.shelves ? comic.shelves.map(s => s.id) : [],
-            category_ids: comic.categories.map(c => c.id),
-            is_hidden:    comic.is_hidden,
-            is_personal:  comic.is_personal,
-            is_approved:  comic.is_approved,
-            thumbnail:    null,
-        });
+        setEditData({ title: comic.title, shelf_ids: comic.shelves?.map(s => s.id) ?? [], category_ids: comic.categories.map(c => c.id), is_hidden: comic.is_hidden, is_personal: comic.is_personal, is_approved: comic.is_approved, thumbnail: null });
     };
 
     const submitUpdate = (e) => {
         e.preventDefault();
-        postUpdate(route('admin.comics.update', editingComic.id), {
-            onSuccess: () => { setEditingComic(null); resetEdit(); },
-        });
+        postUpdate(route('admin.comics.update', editingComic.id), { onSuccess: () => { setEditingComic(null); resetEdit(); } });
     };
 
-    const toggleCategory = (id) => {
-        const ids    = [...editData.category_ids];
-        const index  = ids.indexOf(id);
-        if (index > -1) ids.splice(index, 1); else ids.push(id);
-        setEditData('category_ids', ids);
-    };
-
-    const toggleShelf = (id) => {
-        const ids    = [...(editData.shelf_ids || [])];
-        const index  = ids.indexOf(id);
-        if (index > -1) ids.splice(index, 1); else ids.push(id);
-        setEditData('shelf_ids', ids);
+    const toggle = (field, id) => {
+        const ids = [...(editData[field] || [])];
+        const i = ids.indexOf(id);
+        if (i > -1) ids.splice(i, 1); else ids.push(id);
+        setEditData(field, ids);
     };
 
     const toggleUploadShelf = (id) => {
         const ids = [...(uploadData.shelf_ids || [])];
-        const index = ids.indexOf(id);
-        if (index > -1) ids.splice(index, 1); else ids.push(id);
+        const i = ids.indexOf(id);
+        if (i > -1) ids.splice(i, 1); else ids.push(id);
         setUploadData('shelf_ids', ids);
     };
 
-    const openShare = (comic) => { setSharingComic(comic); setShareUserId(''); };
+    const approveComic  = (id) => router.post(route('admin.comics.approve', id), {}, { preserveScroll: true });
+    const generateAiMeta = (id) => router.post(route('admin.comics.generate-ai', id), {}, { preserveScroll: true });
+    const revokeShare   = (comic, uid) => router.delete(route('admin.comics.revoke-share', [comic.id, uid]), { preserveScroll: true });
+    const revokeRoleShare = (comic, rid) => router.delete(route('admin.comics.revoke-role-share', [comic.id, rid]), { preserveScroll: true });
 
-    const submitShare = () => {
-        if (!shareUserId) return;
-        router.post(route('admin.comics.share', sharingComic.id), { user_id: shareUserId }, {
-            preserveScroll: true,
-            onSuccess: () => setSharingComic(null),
-        });
-    };
+    const submitRoleShare = (rid) => router.post(route('admin.comics.share-role', sharingComic.id), { role_id: rid }, {
+        preserveScroll: true,
+        onSuccess: () => setSharingComic(p => ({ ...p, shared_roles: [...(p.shared_roles || []), roles.find(r => r.id == rid)] })),
+    });
 
-    const revokeShare = (comic, userId) => {
-        router.delete(route('admin.comics.revoke-share', [comic.id, userId]), { preserveScroll: true });
-    };
+    const handleSelectAll = (e) => setSelectedIds(e.target.checked ? comics.data.map(c => c.id) : []);
+    const toggleSelect    = (id) => setSelectedIds(p => p.includes(id) ? p.filter(i => i !== id) : [...p, id]);
 
-    const submitRoleShare = (roleId) => {
-        router.post(route('admin.comics.share-role', sharingComic.id), { role_id: roleId }, {
-            preserveScroll: true,
-            onSuccess: () => setSharingComic(prev => ({ 
-                ...prev, 
-                shared_roles: [...(prev.shared_roles || []), roles.find(r => r.id == roleId)]
-            })),
-        });
-    };
+    const bulkApprove = () => requestConfirm({
+        title: 'Approve Comics', message: `Approve ${selectedIds.length} comics?`, confirmText: 'Approve', confirmStyle: 'primary',
+        onConfirm: () => router.post(route('admin.comics.bulk-approve'), { ids: selectedIds }, { preserveScroll: true, onSuccess: () => setSelectedIds([]) })
+    });
 
-    const revokeRoleShare = (comic, roleId) => {
-        router.delete(route('admin.comics.revoke-role-share', [comic.id, roleId]), { preserveScroll: true });
-    };
-
-    const approveComic = (id) => {
-        router.post(route('admin.comics.approve', id), {}, { preserveScroll: true });
-    };
-
-    const handleSelectAll = (e) => {
-        if (e.target.checked) {
-            setSelectedIds(comics.data.map(c => c.id));
-        } else {
-            setSelectedIds([]);
-        }
-    };
-
-    const toggleSelect = (id) => {
-        setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-    };
-
-    const bulkApprove = () => {
-        requestConfirm({
-            title: 'Approve Comics',
-            message: `Are you sure you want to approve ${selectedIds.length} comics?`,
-            confirmText: 'Approve',
-            confirmStyle: 'primary',
-            onConfirm: () => {
-                router.post(route('admin.comics.bulk-approve'), { ids: selectedIds }, {
-                    preserveScroll: true,
-                    onSuccess: () => setSelectedIds([]),
-                });
-            }
-        });
-    };
-
-    const generateAiMeta = (id) => {
-        router.post(route('admin.comics.generate-ai', id), {}, { preserveScroll: true });
-    };
-
-    const bulkGenerateAiMeta = () => {
-        requestConfirm({
-            title: 'Bulk AI Auto-Tagging',
-            message: `Are you sure you want to queue ${selectedIds.length} comics for AI auto-tagging?`,
-            onConfirm: () => {
-                router.post(route('admin.comics.bulk-generate-ai'), { ids: selectedIds }, {
-                    onSuccess: () => {
-                        setSelectedIds([]);
-                        closeConfirm();
-                    }
-                });
-            }
-        });
-    };
+    const bulkGenerateAiMeta = () => requestConfirm({
+        title: 'AI Auto-Tagging', message: `Queue ${selectedIds.length} comics for AI tagging?`,
+        onConfirm: () => router.post(route('admin.comics.bulk-generate-ai'), { ids: selectedIds }, { onSuccess: () => { setSelectedIds([]); closeConfirm(); } })
+    });
 
     const handleBulkShelf = (action) => {
         if (!bulkShelfId) return;
-        
         const shelfName = shelves.find(s => s.id == bulkShelfId)?.name;
         requestConfirm({
             title: `Bulk ${action === 'set' ? 'Move' : 'Add'} to Shelf`,
-            message: `Are you sure you want to ${action === 'set' ? 'move' : 'add'} ${selectedIds.length} comics to "${shelfName}"?`,
-            onConfirm: () => {
-                router.post(route('admin.comics.bulk-shelves'), { 
-                    ids: selectedIds, 
-                    shelf_id: bulkShelfId,
-                    action: action
-                }, {
-                    onSuccess: () => {
-                        setSelectedIds([]);
-                        setBulkShelfId('');
-                        closeConfirm();
-                    }
-                });
-            }
+            message: `${action === 'set' ? 'Move' : 'Add'} ${selectedIds.length} comics to "${shelfName}"?`,
+            onConfirm: () => router.post(route('admin.comics.bulk-shelves'), { ids: selectedIds, shelf_id: bulkShelfId, action }, {
+                onSuccess: () => { setSelectedIds([]); setBulkShelfId(''); closeConfirm(); }
+            })
         });
     };
 
-    const setVisibility = (v) => router.get(route('admin.comics.index'), { ...filters, visibility: v, approval: 'all' }, { replace: true, preserveScroll: true });
+    const setVisibility     = (v) => router.get(route('admin.comics.index'), { ...filters, visibility: v, approval: 'all' }, { replace: true, preserveScroll: true });
     const setApprovalFilter = (a) => router.get(route('admin.comics.index'), { ...filters, approval: a, visibility: 'all' }, { replace: true, preserveScroll: true });
-
-    const [searchQuery, setSearchQuery] = useState(filters.q || '');
 
     const handleSearch = (e) => {
         e.preventDefault();
         router.get(route('admin.comics.index'), { ...filters, q: searchQuery }, { replace: true, preserveScroll: true });
     };
 
-    const approveAllPending = () => {
-        requestConfirm({
-            title: 'Approve All Pending',
-            message: 'Are you sure you want to approve ALL pending comics? This cannot be undone.',
-            confirmText: 'Approve All',
-            confirmStyle: 'primary',
-            onConfirm: () => {
-                router.post(route('admin.comics.approve-all-pending'), {}, {
-                    preserveScroll: true,
-                });
-            }
-        });
-    };
+    const approveAllPending = () => requestConfirm({
+        title: 'Approve All Pending', message: 'Approve ALL pending comics? This cannot be undone.', confirmText: 'Approve All', confirmStyle: 'primary',
+        onConfirm: () => router.post(route('admin.comics.approve-all-pending'), {}, { preserveScroll: true })
+    });
 
-    const autoTagAllPending = () => {
-        requestConfirm({
-            title: 'Auto-Tag All Pending',
-            message: 'Are you sure you want to queue AI tagging for ALL comics that missing metadata? This might take a while.',
-            confirmText: 'Queue All',
-            confirmStyle: 'primary',
-            onConfirm: () => {
-                router.post(route('admin.comics.auto-tag-all-pending'), {}, {
-                    preserveScroll: true,
-                });
-            }
-        });
-    };
+    const autoTagAllPending = () => requestConfirm({
+        title: 'Auto-Tag All Pending', message: 'Queue AI tagging for ALL comics missing metadata? This may take a while.', confirmText: 'Queue All', confirmStyle: 'primary',
+        onConfirm: () => router.post(route('admin.comics.auto-tag-all-pending'), {}, { preserveScroll: true })
+    });
 
     const TABS = [
-        { key: 'all',    label: 'All Comics' },
-        { key: 'public', label: 'Public' },
-        { key: 'hidden', label: 'Hidden' },
-        { key: 'pending', label: 'Pending Approval', filter: 'approval' },
+        { key: 'all',     label: 'All',     filter: 'visibility' },
+        { key: 'public',  label: 'Public',  filter: 'visibility' },
+        { key: 'hidden',  label: 'Hidden',  filter: 'visibility' },
+        { key: 'pending', label: 'Pending', filter: 'approval'   },
     ];
 
+    const isTabActive = (tab) =>
+        tab.filter === 'approval' ? filters.approval === tab.key
+        : tab.key === 'all'      ? !filters.visibility || filters.visibility === 'all'
+        : filters.visibility === tab.key;
+
+    // ── render ────────────────────────────────────────────────────────────────
     return (
-        <ComicLayout auth={auth}>
+        <ComicLayout auth={auth} fullHeight>
             <Head title="Manage Comics" />
 
-            <div className="max-w-7xl mx-auto flex flex-col gap-8">
-                {/* Header */}
-                <div className="flex items-center justify-between flex-wrap gap-4">
-                    <h2 className="font-['Bebas_Neue'] text-4xl tracking-[3px] uppercase text-white">
-                        Library <span className="text-[#e8003d]">Management</span>
-                    </h2>
-                    <div className="flex gap-3 flex-wrap">
-                        <Link href={route('admin.users.index')} className="bg-white/5 border border-white/10 text-white px-5 py-2 rounded-lg text-xs uppercase tracking-widest font-bold hover:bg-white/10 transition-colors">
-                            👥 Users
-                        </Link>
-                        <Link href={route('admin.shelves.index')} className="bg-white/5 border border-white/10 text-white px-5 py-2 rounded-lg text-xs uppercase tracking-widest font-bold hover:bg-white/10 transition-colors">
-                            Shelves
-                        </Link>
-                        <Link href={route('admin.categories.index')} className="bg-white/5 border border-white/10 text-white px-5 py-2 rounded-lg text-xs uppercase tracking-widest font-bold hover:bg-white/10 transition-colors">
-                            Categories
-                        </Link>
-                        <Link href={route('admin.duplicates.index')} className="bg-blue-500/10 border border-blue-500/20 text-[#60a5fa] px-5 py-2 rounded-lg text-xs uppercase tracking-widest font-bold hover:bg-blue-500/20 transition-colors flex items-center gap-2">
-                            🔍 Duplicates
-                        </Link>
-                        <Link href={route('admin.logs.index')} className="bg-purple-500/10 border border-purple-500/20 text-[#c084fc] px-5 py-2 rounded-lg text-xs uppercase tracking-widest font-bold hover:bg-purple-500/20 transition-colors flex items-center gap-2">
-                            📜 Activity
-                        </Link>
-                    </div>
-                </div>
+            {/*
+              ┌─────────────────────────────────────────────────────────────┐
+              │  FIXED-HEIGHT SHELL — fills viewport height passed from     │
+              │  ComicLayout via CSS. Only .scroll-zone overflows.          │
+              └─────────────────────────────────────────────────────────────┘
+              Add this to your global CSS / app.css:
+                .admin-shell { display:flex; flex-direction:column; height:100%; overflow:hidden; }
+                .scroll-zone { flex:1; overflow-y:auto; overflow-x:hidden; }
+                .scroll-zone::-webkit-scrollbar { width:4px }
+                .scroll-zone::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.1); border-radius:4px }
+              And make ComicLayout pass height:100vh (minus its own nav) down.
+            */}
 
-                {/* Upload + Sync */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-[#16161f] border border-white/7 rounded-2xl p-6">
-                        <h3 className="text-lg font-['Bebas_Neue'] tracking-widest text-white mb-4">Upload New Comic</h3>
-                        <form onSubmit={submitUpload}>
-                            <input
-                                type="file"
-                                onChange={(e) => setUploadData('comic', e.target.files[0])}
-                                className="block w-full text-sm text-[#8888a0] file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[#e8003d]/10 file:text-[#e8003d] hover:file:bg-[#e8003d]/20 mb-4"
-                                required
-                            />
-                            {uploadErrors.comic && <div className="text-[#e8003d] text-xs mb-2">{uploadErrors.comic}</div>}
-                            
-                            <div className="flex flex-col gap-4 mb-5">
-                                <label className="flex items-center gap-3 cursor-pointer group">
-                                    <input 
-                                        type="checkbox" 
-                                        onChange={e => setUploadData('is_personal', e.target.checked)}
-                                        className="hidden" 
-                                    />
-                                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${uploadData.is_personal ? 'bg-blue-500 border-blue-500' : 'border-white/20 group-hover:border-white/40'}`}>
-                                        {uploadData.is_personal && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12" /></svg>}
-                                    </div>
-                                    <span className="text-sm text-[#a0a0b8] group-hover:text-white transition-colors">Keep as Personal PDF</span>
-                                </label>
+            <div className="admin-shell" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
 
-                                <label className="flex items-center gap-3 cursor-pointer group">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={uploadData.generate_ai}
-                                        onChange={e => setUploadData('generate_ai', e.target.checked)}
-                                        className="hidden" 
-                                    />
-                                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${uploadData.generate_ai ? 'bg-purple-500 border-purple-500' : 'border-white/20 group-hover:border-white/40'}`}>
-                                        {uploadData.generate_ai && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12" /></svg>}
-                                    </div>
-                                    <span className="text-sm text-[#a0a0b8] group-hover:text-white transition-colors">Generate AI Tags & Summary</span>
-                                </label>
+                {/* ── HEADER BAR ──────────────────────────────────────── */}
+                <div style={{ flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.06)', background: '#0e0e16' }}>
+                    {/* Top row */}
+                    <div className="flex items-center justify-between px-6 py-3 gap-4 flex-wrap">
+                        <div className="flex items-center gap-3">
+                            <h1 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, letterSpacing: 3, color: '#fff' }}>
+                                Library <span style={{ color: '#e8003d' }}>Management</span>
+                            </h1>
+                            {/* Quick nav links */}
+                            <div className="flex items-center gap-1 ml-4">
+                                {[
+                                    { href: route('admin.users.index'), label: 'Users' },
+                                    { href: route('admin.shelves.index'), label: 'Shelves' },
+                                    { href: route('admin.categories.index'), label: 'Categories' },
+                                    { href: route('admin.duplicates.index'), label: 'Duplicates' },
+                                    { href: route('admin.logs.index'), label: 'Activity' },
+                                ].map(({ href, label }) => (
+                                    <Link key={label} href={href}
+                                        className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg text-[#666688] hover:text-white hover:bg-white/8 transition-all">
+                                        {label}
+                                    </Link>
+                                ))}
                             </div>
+                        </div>
 
-                            <div className="flex flex-col gap-2 mb-5">
-                                <label className="text-[11px] tracking-widest uppercase font-bold text-[#8888a0]">Assign to Shelves</label>
-                                <div className="bg-[#0c0c12] border border-white/10 rounded-lg p-3 h-32 overflow-y-auto flex flex-col gap-2">
-                                    {shelves.map(s => (
-                                        <label key={s.id} className="flex items-center gap-3 cursor-pointer group">
-                                            <div onClick={() => toggleUploadShelf(s.id)} className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${uploadData.shelf_ids.includes(s.id) ? 'bg-[#e8003d] border-[#e8003d]' : 'border-white/20 group-hover:border-white/40'}`}>
-                                                {uploadData.shelf_ids.includes(s.id) && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12" /></svg>}
-                                            </div>
-                                            <span className={`text-[12px] ${uploadData.shelf_ids.includes(s.id) ? 'text-white' : 'text-[#8888a0]'}`}>{s.name}</span>
+                        {/* Sync status + upload toggle */}
+                        <div className="flex items-center gap-2">
+                            {syncStatus.status === 'running' && (
+                                <span className="text-[11px] text-blue-400 font-bold uppercase tracking-wider animate-pulse">
+                                    ⟳ {syncStatus.progress || 'Syncing...'}
+                                </span>
+                            )}
+                            {syncStatus.status === 'idle' && syncStatus.last_sync_at && (
+                                <span className="text-[10px] text-[#44445a] uppercase tracking-tighter">
+                                    Synced {new Date(syncStatus.last_sync_at).toLocaleString()}
+                                </span>
+                            )}
+                            <button onClick={runSync} disabled={syncProcessing || syncStatus.status === 'running'}
+                                className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-white/10 text-[#888] hover:text-white hover:border-white/20 transition-all disabled:opacity-40">
+                                ⟳ Sync
+                            </button>
+                            <button onClick={() => setUploadPanelOpen(p => !p)}
+                                className="text-[11px] font-bold uppercase tracking-wider px-4 py-1.5 rounded-lg border transition-all"
+                                style={{ background: uploadPanelOpen ? '#e8003d' : 'rgba(232,0,61,0.12)', borderColor: 'rgba(232,0,61,0.4)', color: uploadPanelOpen ? '#fff' : '#e8003d' }}>
+                                + Upload PDF
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Upload slide-down panel */}
+                    {uploadPanelOpen && (
+                        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', background: '#0a0a12', padding: '20px 24px' }}>
+                            <form onSubmit={submitUpload} className="flex items-end gap-6 flex-wrap">
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-[#666688]">PDF File *</label>
+                                    <input type="file" onChange={e => setUploadData('comic', e.target.files[0])} required
+                                        className="text-sm text-[#8888a0] file:mr-3 file:py-1.5 file:px-4 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#e8003d]/15 file:text-[#e8003d] hover:file:bg-[#e8003d]/25" />
+                                    {uploadErrors.comic && <span className="text-[#e8003d] text-xs">{uploadErrors.comic}</span>}
+                                </div>
+
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-[#666688]">Thumbnail (optional)</label>
+                                    <input type="file" onChange={e => setUploadData('thumbnail', e.target.files[0])}
+                                        className="text-sm text-[#8888a0] file:mr-3 file:py-1.5 file:px-4 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-white/8 file:text-white hover:file:bg-white/12" />
+                                </div>
+
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-[#666688]">Shelves</label>
+                                    <div className="flex flex-wrap gap-2 max-h-16 overflow-y-auto">
+                                        {shelves.map(s => (
+                                            <button key={s.id} type="button" onClick={() => toggleUploadShelf(s.id)}
+                                                className="text-[11px] font-bold px-3 py-1 rounded-lg border transition-all"
+                                                style={{ background: uploadData.shelf_ids.includes(s.id) ? 'rgba(232,0,61,0.2)' : 'rgba(255,255,255,0.05)', borderColor: uploadData.shelf_ids.includes(s.id) ? 'rgba(232,0,61,0.5)' : 'rgba(255,255,255,0.1)', color: uploadData.shelf_ids.includes(s.id) ? '#e8003d' : '#888' }}>
+                                                {s.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-4">
+                                    {[['is_personal', 'Personal', '#3b82f6'], ['generate_ai', 'AI Tags', '#a855f7']].map(([key, label, color]) => (
+                                        <label key={key} className="flex items-center gap-2 cursor-pointer">
+                                            <Checkbox checked={uploadData[key]} onChange={() => setUploadData(key, !uploadData[key])} color={color} />
+                                            <span className="text-[12px] text-[#888]">{label}</span>
                                         </label>
                                     ))}
                                 </div>
-                            </div>
 
-                            <div className="flex flex-col gap-2 mb-5">
-                                <label className="text-[11px] tracking-widest uppercase font-bold text-[#8888a0]">Optional Thumbnail (JPG/PNG)</label>
-                                <input
-                                    type="file"
-                                    onChange={(e) => setUploadData('thumbnail', e.target.files[0])}
-                                    className="block w-full text-xs text-[#8888a0] file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-white/5 file:text-white hover:file:bg-white/10"
-                                />
-                                {uploadErrors.thumbnail && <div className="text-[#e8003d] text-xs mt-1">{uploadErrors.thumbnail}</div>}
-                            </div>
-
-                            <button type="submit" disabled={uploading} className="bg-[#e8003d] text-white px-8 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest disabled:opacity-50 transition-all hover:bg-[#ff0044] shadow-lg shadow-[#e8003d]/20">
-                                {uploading ? 'Uploading...' : 'Upload PDF'}
-                            </button>
-                        </form>
-                    </div>
-
-                    <div className="bg-[#16161f] border border-white/7 rounded-2xl p-6 flex flex-col justify-center">
-                        <h3 className="text-lg font-['Bebas_Neue'] tracking-widest text-white mb-2">Library Sync</h3>
-                        <p className="text-sm text-[#8888a0] mb-4">Scan the system folder for new PDFs and import them.</p>
-                        
-                        <div className="flex flex-col gap-3">
-                            <button 
-                                onClick={runSync} 
-                                disabled={syncProcessing || syncStatus.status === 'running'} 
-                                className="bg-white/5 border border-white/7 text-white px-6 py-2 rounded-lg font-medium disabled:opacity-50 transition-colors hover:bg-white/10 w-max"
-                            >
-                                {syncStatus.status === 'running' ? 'Sync in Progress...' : 'Sync Now'}
-                            </button>
-
-                            {syncStatus.status === 'running' && (
-                                <div className="animate-pulse">
-                                    <p className="text-xs text-blue-400 font-bold uppercase tracking-widest">
-                                        {syncStatus.progress || 'Starting sync...'}
-                                    </p>
-                                </div>
-                            )}
-
-                            {syncStatus.status === 'idle' && syncStatus.last_sync_at && (
-                                <p className="text-[10px] text-[#66667f] uppercase tracking-tighter">
-                                    Last sync: {new Date(syncStatus.last_sync_at).toLocaleString()}
-                                </p>
-                            )}
-
-                            {syncStatus.status === 'error' && (
-                                <p className="text-xs text-[#e8003d] font-bold">
-                                    Error: {syncStatus.error}
-                                </p>
-                            )}
+                                <button type="submit" disabled={uploading}
+                                    className="px-6 py-2 rounded-lg font-bold text-[12px] uppercase tracking-widest text-white disabled:opacity-50 transition-all"
+                                    style={{ background: '#e8003d' }}>
+                                    {uploading ? 'Uploading…' : 'Upload'}
+                                </button>
+                            </form>
                         </div>
-                    </div>
-                </div>
+                    )}
 
-                <div className="flex items-center justify-between flex-wrap gap-4">
-                    <div className="flex items-center gap-4 flex-wrap">
+                    {/* Toolbar: filters + search + actions */}
+                    <div className="flex items-center gap-3 px-6 py-2.5 flex-wrap" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                        {/* Search */}
                         <form onSubmit={handleSearch} className="relative flex items-center">
-                            <svg className="absolute left-3 text-[#55556a] pointer-events-none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                                <circle cx="11" cy="11" r="8" />
-                                <path d="m21 21-4.35-4.35" />
-                            </svg>
+                            <span className="absolute left-3 text-[#44445a] pointer-events-none">
+                                <SearchIcon />
+                            </span>
                             <input
                                 type="text"
-                                placeholder="Search by title or path..."
+                                placeholder="Search comics…"
                                 value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="bg-[#16161f] border border-white/7 text-white text-[12px] py-2 pl-10 pr-4 rounded-xl w-[280px] outline-none focus:border-[#e8003d] focus:bg-white/5 transition-all"
+                                onChange={e => setSearchQuery(e.target.value)}
+                                className="bg-white/5 border border-white/8 text-white text-[12px] py-1.5 pl-9 pr-8 rounded-lg w-56 outline-none focus:border-[#e8003d]/50 transition-all placeholder:text-[#44445a]"
                             />
                             {searchQuery && (
-                                <button 
-                                    type="button"
-                                    onClick={() => { setSearchQuery(''); router.get(route('admin.comics.index'), { ...filters, q: '' }, { replace: true }); }}
-                                    className="absolute right-3 text-[#55556a] hover:text-white transition-colors"
-                                >
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                                <button type="button" onClick={() => { setSearchQuery(''); router.get(route('admin.comics.index'), { ...filters, q: '' }, { replace: true }); }}
+                                    className="absolute right-2.5 text-[#44445a] hover:text-white transition-colors">
+                                    <XIcon size={11} />
                                 </button>
                             )}
                         </form>
 
-                        <div className="flex items-center gap-1 p-1 bg-[#16161f] border border-white/7 rounded-xl w-fit">
+                        {/* Tab filters */}
+                        <div className="flex items-center gap-0.5 bg-white/4 border border-white/8 rounded-lg p-0.5">
                             {TABS.map(tab => (
-                                <button
-                                    key={tab.key}
+                                <button key={tab.key}
                                     onClick={() => tab.filter === 'approval' ? setApprovalFilter(tab.key) : setVisibility(tab.key)}
-                                    className={`px-5 py-2 rounded-lg text-[12px] uppercase tracking-widest font-black transition-all ${
-                                        (tab.filter === 'approval' ? filters.approval === tab.key : filters.visibility === tab.key) || (tab.key === 'all' && !filters.visibility && !filters.approval)
-                                            ? 'bg-[#e8003d] text-white shadow-lg shadow-[#e8003d]/20'
-                                            : 'text-[#8888a0] hover:text-white hover:bg-white/5'
-                                    }`}
-                                >
+                                    className="px-4 py-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider transition-all"
+                                    style={isTabActive(tab)
+                                        ? { background: '#e8003d', color: '#fff' }
+                                        : { color: '#666688' }}>
                                     {tab.label}
                                 </button>
                             ))}
                         </div>
+
+                        <div className="flex-1" />
+
+                        {/* Approve + autotag all */}
+                        <button onClick={approveAllPending}
+                            className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all">
+                            ✓ Approve All
+                        </button>
+                        <button onClick={autoTagAllPending}
+                            className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-purple-500/25 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-all">
+                            ✦ Auto-Tag All
+                        </button>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        {/* Approve All Pending button — always visible */}
-                        <button 
-                            onClick={approveAllPending}
-                            className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-5 py-2 rounded-lg text-[11px] font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-all"
-                        >
-                            ✅ Approve All
-                        </button>
-
-                        <button 
-                            onClick={autoTagAllPending}
-                            className="bg-purple-500/10 border border-purple-500/20 text-purple-400 px-5 py-2 rounded-lg text-[11px] font-black uppercase tracking-widest hover:bg-purple-500/20 transition-all"
-                        >
-                            ✨ Auto-Tag All Pending
-                        </button>
-
+                    {/* Bulk action bar — appears when rows are selected */}
                     {selectedIds.length > 0 && (
-                        <div className="flex items-center gap-4 bg-[#e8003d]/10 border border-[#e8003d]/20 px-4 py-2 rounded-xl animate-in fade-in slide-in-from-top-2">
-                            <span className="text-[11px] font-black text-[#e8003d] uppercase tracking-widest">{selectedIds.length} Selected</span>
-                            <button 
-                                onClick={bulkApprove}
-                                className="bg-[#e8003d] text-white px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-[#ff0044] transition-all shadow-lg shadow-[#e8003d]/20"
-                            >
-                                Bulk Approve
+                        <div className="flex items-center gap-3 px-6 py-2 flex-wrap" style={{ background: 'rgba(232,0,61,0.06)', borderTop: '1px solid rgba(232,0,61,0.15)' }}>
+                            <span className="text-[11px] font-black text-[#e8003d] uppercase tracking-wider">
+                                {selectedIds.length} selected
+                            </span>
+                            <div className="w-px h-4 bg-white/10" />
+                            <button onClick={bulkApprove}
+                                className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg bg-[#e8003d] text-white hover:bg-[#ff1a4d] transition-all">
+                                Approve
                             </button>
-                             <button 
-                                onClick={bulkGenerateAiMeta}
-                                className="bg-purple-600/20 text-purple-400 border border-purple-500/30 px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-purple-600/40 transition-all shadow-lg"
-                            >
-                                ✨ Auto-Tag
+                            <button onClick={bulkGenerateAiMeta}
+                                className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-all">
+                                ✦ AI Tag
                             </button>
-
-                            <div className="h-6 w-[1px] bg-white/10 mx-2"></div>
-
-                            <div className="flex items-center gap-2">
-                                <select 
-                                    value={bulkShelfId}
-                                    onChange={e => setBulkShelfId(e.target.value)}
-                                    className="bg-black/40 border border-white/10 text-white rounded-lg px-3 py-1.5 text-[10px] outline-none focus:border-[#e8003d] transition-colors"
-                                >
-                                    <option value="">Select Shelf...</option>
-                                    {shelves.map(s => (
-                                        <option key={s.id} value={s.id}>{s.name}</option>
-                                    ))}
-                                </select>
-                                <button 
-                                    onClick={() => handleBulkShelf('add')}
-                                    disabled={!bulkShelfId}
-                                    className="bg-blue-600/20 text-blue-400 border border-blue-500/30 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-blue-600/40 transition-all disabled:opacity-30"
-                                >
-                                    Add to Shelf
-                                </button>
-                                <button 
-                                    onClick={() => handleBulkShelf('set')}
-                                    disabled={!bulkShelfId}
-                                    className="bg-teal-600/20 text-teal-400 border border-teal-500/30 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-teal-600/40 transition-all disabled:opacity-30"
-                                >
-                                    Move to Shelf
-                                </button>
-                            </div>
-
-                            <button onClick={() => setSelectedIds([])} className="text-[#8888a0] hover:text-white transition-colors ml-2">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                            <div className="w-px h-4 bg-white/10" />
+                            <select value={bulkShelfId} onChange={e => setBulkShelfId(e.target.value)}
+                                className="bg-black/30 border border-white/10 text-white text-[11px] rounded-lg px-3 py-1.5 outline-none focus:border-[#e8003d] transition-colors">
+                                <option value="">Shelf…</option>
+                                {shelves.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                            <button onClick={() => handleBulkShelf('add')} disabled={!bulkShelfId}
+                                className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-blue-500/25 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 disabled:opacity-30 transition-all">
+                                Add to Shelf
+                            </button>
+                            <button onClick={() => handleBulkShelf('set')} disabled={!bulkShelfId}
+                                className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-teal-500/25 bg-teal-500/10 text-teal-400 hover:bg-teal-500/20 disabled:opacity-30 transition-all">
+                                Move to Shelf
+                            </button>
+                            <button onClick={() => setSelectedIds([])} className="ml-auto text-[#44445a] hover:text-white transition-colors">
+                                <XIcon />
                             </button>
                         </div>
                     )}
-                    </div>
                 </div>
 
-                {/* Comics Table */}
-                <div className="bg-[#16161f] border border-white/7 rounded-2xl overflow-hidden">
-                    <div className="p-6 overflow-x-auto">
-                        <table className="min-w-full divide-y divide-white/5" style={{ minWidth: '840px' }}>
-                            <thead>
-                                <tr className="border-b border-white/7">
-                                    <th className="px-4 py-4 text-left w-10">
-                                        <input 
-                                            type="checkbox" 
+                {/* ── SCROLLABLE TABLE ZONE ───────────────────────────── */}
+                <div className="scroll-zone" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+                    <div style={{ overflowX: 'auto' }}>
+                        <table style={{ minWidth: 860, width: '100%', borderCollapse: 'collapse' }}>
+                            <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#0b0b14' }}>
+                                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                                    <th className="px-4 py-3 w-10">
+                                        <input type="checkbox"
                                             checked={selectedIds.length === comics.data.length && comics.data.length > 0}
                                             onChange={handleSelectAll}
-                                            className="w-4 h-4 rounded border-white/20 bg-white/5 text-[#e8003d] focus:ring-[#e8003d] focus:ring-offset-0"
-                                        />
+                                            className="w-4 h-4 rounded accent-[#e8003d] cursor-pointer" />
                                     </th>
-                                    <th className="w-10 px-4 py-4 text-left text-[11px] font-black text-[#a0a0b8] uppercase tracking-widest whitespace-nowrap">Tmb</th>
-                                    {['Comic', 'Shelf', 'Categories', 'Status', 'Shared With', 'Uploaded By', 'Actions'].map(h => (
-                                        <th key={h} className={`px-4 py-4 text-left text-[11px] font-black text-[#a0a0b8] uppercase tracking-widest whitespace-nowrap ${h === 'Actions' ? 'text-right' : ''}`}>{h}</th>
+                                    {['TMB', 'Comic', 'Shelf', 'Categories', 'Status', 'Shared', 'By', 'Actions'].map((h, i) => (
+                                        <th key={h} className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest whitespace-nowrap"
+                                            style={{ color: '#44445a', textAlign: h === 'Actions' ? 'right' : 'left' }}>
+                                            {h}
+                                        </th>
                                     ))}
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-white/5">
-                                {comics.data.map((comic) => (
-                                    <tr key={comic.id} className={`group hover:bg-white/[0.02] transition-colors ${comic.is_hidden ? 'opacity-60' : ''} ${selectedIds.includes(comic.id) ? 'bg-[#e8003d]/5' : ''}`}>
-                                        <td className="px-4 py-4">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={selectedIds.includes(comic.id)}
-                                                onChange={() => toggleSelect(comic.id)}
-                                                className="w-4 h-4 rounded border-white/20 bg-white/5 text-[#e8003d] focus:ring-[#e8003d] focus:ring-offset-0"
-                                            />
+                            <tbody>
+                                {comics.data.map((comic, idx) => (
+                                    <tr key={comic.id}
+                                        style={{
+                                            borderBottom: '1px solid rgba(255,255,255,0.04)',
+                                            background: selectedIds.includes(comic.id) ? 'rgba(232,0,61,0.05)' : 'transparent',
+                                            opacity: comic.is_hidden ? 0.6 : 1,
+                                            transition: 'background 0.1s',
+                                        }}
+                                        onMouseEnter={e => { if (!selectedIds.includes(comic.id)) e.currentTarget.style.background = 'rgba(255,255,255,0.025)'; }}
+                                        onMouseLeave={e => { e.currentTarget.style.background = selectedIds.includes(comic.id) ? 'rgba(232,0,61,0.05)' : 'transparent'; }}>
+
+                                        {/* Checkbox */}
+                                        <td className="px-4 py-3">
+                                            <input type="checkbox" checked={selectedIds.includes(comic.id)} onChange={() => toggleSelect(comic.id)}
+                                                className="w-4 h-4 rounded accent-[#e8003d] cursor-pointer" />
                                         </td>
-                                        <td className="px-4 py-4">
-                                            <Link href={route('comics.show', comic.id)} target="_blank" className="block w-10 h-14 rounded overflow-hidden bg-white/5 border border-white/10 shrink-0 hover:border-[#ff3366] transition-colors">
-                                                {comic.thumbnail ? (
-                                                    <img src={`/thumbs/${comic.thumbnail}`} className="w-full h-full object-cover" alt="" />
-                                                ) : (
-                                                    <div className="w-full h-full flex items-center justify-center text-[10px] text-[#55556a]">NA</div>
-                                                )}
+
+                                        {/* Thumbnail */}
+                                        <td className="px-4 py-3">
+                                            <Link href={route('comics.show', comic.id)} target="_blank"
+                                                className="block w-9 h-12 rounded-md overflow-hidden flex-shrink-0"
+                                                style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.04)' }}>
+                                                {comic.thumbnail
+                                                    ? <img src={`/thumbs/${comic.thumbnail}`} className="w-full h-full object-cover" alt="" />
+                                                    : <div className="w-full h-full flex items-center justify-center text-[9px] font-bold text-[#44445a]">NA</div>
+                                                }
                                             </Link>
                                         </td>
-                                        <td className="px-4 py-4">
-                                            <div className="flex flex-col">
-                                                <Link href={route('comics.show', comic.id)} target="_blank" className="text-white font-bold hover:text-[#ff3366] transition-colors text-sm flex items-center gap-2">
-                                                    {comic.title}
-                                                    {comic.is_personal && <span className="text-[10px] bg-blue-500/20 text-[#60a5fa] px-1.5 py-0.5 rounded border border-blue-500/30 uppercase tracking-tighter">Personal</span>}
-                                                </Link>
-                                                <span className="text-[10px] text-[#a0a0b8] font-mono mt-0.5 truncate max-w-[200px]">{comic.path}</span>
+
+                                        {/* Title + path */}
+                                        <td className="px-4 py-3" style={{ maxWidth: 220 }}>
+                                            <Link href={route('comics.show', comic.id)} target="_blank"
+                                                className="text-[13px] font-semibold text-white hover:text-[#ff3366] transition-colors truncate block">
+                                                {comic.title}
+                                                {comic.is_personal && <span className="ml-1.5 text-[9px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/25 uppercase">Personal</span>}
+                                            </Link>
+                                            <span className="text-[10px] text-[#44445a] font-mono block truncate mt-0.5">{comic.path}</span>
+                                        </td>
+
+                                        {/* Shelf */}
+                                        <td className="px-4 py-3">
+                                            {comic.shelves?.length > 0
+                                                ? <div className="flex flex-col gap-0.5">{comic.shelves.map(s => <span key={s.id} className="text-[11px] text-[#cbd5e1]">{s.name}</span>)}</div>
+                                                : <span className="text-[10px] font-bold uppercase tracking-wider text-[#333348]">—</span>}
+                                        </td>
+
+                                        {/* Categories */}
+                                        <td className="px-4 py-3">
+                                            <div className="flex flex-wrap gap-1">
+                                                {comic.categories.slice(0, 2).map(c => (
+                                                    <span key={c.id} className="text-[10px] font-bold px-2 py-0.5 rounded"
+                                                        style={{ background: 'rgba(255,255,255,0.07)', color: '#94a3b8', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                                        {c.name}
+                                                    </span>
+                                                ))}
+                                                {comic.categories.length > 2 && <span className="text-[10px] text-[#64748b] font-bold">+{comic.categories.length - 2}</span>}
+                                                {comic.categories.length === 0 && <span className="text-[10px] font-bold uppercase tracking-wider text-[#333348]">—</span>}
                                             </div>
                                         </td>
-                                        <td className="px-4 py-4 text-sm font-medium">
-                                            {comic.shelves && comic.shelves.length > 0
-                                                ? <div className="flex flex-col gap-0.5">
-                                                    {comic.shelves.map(s => (
-                                                        <span key={s.id} className="text-[#e2e8f0] text-xs">{s.name}</span>
+
+                                        {/* Status */}
+                                        <td className="px-4 py-3"><StatusPill comic={comic} /></td>
+
+                                        {/* Shared with */}
+                                        <td className="px-4 py-3">
+                                            {comic.shared_with?.length > 0
+                                                ? <div className="flex flex-wrap gap-1">
+                                                    {comic.shared_with.slice(0, 2).map(u => (
+                                                        <span key={u.id} className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                                                            style={{ background: 'rgba(232,0,61,0.1)', color: '#fca5a5', border: '1px solid rgba(232,0,61,0.2)' }}>
+                                                            {u.name}
+                                                            <button onClick={() => revokeShare(comic, u.id)} className="hover:text-white transition-colors ml-0.5"><XIcon size={9} /></button>
+                                                        </span>
                                                     ))}
                                                   </div>
-                                                : <span className="text-[10px] uppercase tracking-widest text-[#64748b] font-black">None</span>
-                                            }
+                                                : <span className="text-[10px] font-bold uppercase tracking-wider text-[#333348]">—</span>}
                                         </td>
-                                        <td className="px-4 py-4">
-                                            <div className="flex flex-wrap gap-1">
-                                                {comic.categories.length > 0
-                                                    ? comic.categories.slice(0, 2).map(c => (
-                                                        <span key={c.id} className="text-[10px] bg-[#334155]/50 text-white px-2 py-0.5 rounded border border-[#475569] font-bold">{c.name}</span>
-                                                    ))
-                                                    : <span className="text-[10px] uppercase tracking-widest text-[#64748b] font-black">-</span>
-                                                }
-                                                {comic.categories.length > 2 && <span className="text-[10px] text-[#cbd5e1] font-bold">+{comic.categories.length - 2}</span>}
-                                            </div>
+
+                                        {/* Uploaded by */}
+                                        <td className="px-4 py-3">
+                                            <span className="text-[12px] text-[#8888a0]">{comic.uploader?.name ?? 'System'}</span>
                                         </td>
-                                        <td className="px-4 py-4">
-                                            <div className="flex flex-col gap-1.5">
-                                                {comic.is_hidden
-                                                    ? <span className="text-[10px] text-[#f87171] font-black uppercase tracking-widest flex items-center gap-1">🔒 Hidden</span>
-                                                    : <span className="text-[10px] text-[#22c55e] font-black uppercase tracking-widest">✓ Public</span>
-                                                }
+
+                                        {/* Actions */}
+                                        <td className="px-4 py-3">
+                                            <div className="flex items-center justify-end gap-1">
                                                 {!comic.is_approved && !comic.is_personal && (
-                                                    <span className="text-[10px] bg-[#fbbf24]/20 text-[#fde047] px-2 py-0.5 rounded border border-[#fbbf24]/40 uppercase font-black tracking-widest w-fit">Pending Auth</span>
+                                                    <ActionBtn onClick={() => approveComic(comic.id)} title="Approve" variant="green"><CheckIcon /></ActionBtn>
                                                 )}
-                                                {comic.is_approved && !comic.is_personal && (
-                                                    <span className="text-[9px] text-[#94a3b8] font-bold uppercase tracking-widest">Approved</span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <div className="flex flex-wrap gap-1 items-center">
-                                                {comic.shared_with?.length > 0
-                                                    ? comic.shared_with.slice(0, 2).map(u => (
-                                                        <span key={u.id} className="text-[10px] bg-[#fca5a5]/10 text-[#fca5a5] px-2 py-0.5 rounded border border-[#fca5a5]/30 font-bold flex items-center gap-1">
-                                                            {u.name}
-                                                            <button onClick={() => revokeShare(comic, u.id)} className="ml-1 hover:text-white transition-colors">✕</button>
-                                                        </span>
-                                                    ))
-                                                    : <span className="text-[10px] text-[#64748b] font-black">—</span>
-                                                }
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <span className="text-[#e2e8f0] text-sm font-bold">
-                                                {comic.uploader?.name || <span className="text-[#cbd5e1]">System</span>}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                {!comic.is_approved && !comic.is_personal && (
-                                                    <button onClick={() => approveComic(comic.id)} className="p-2 rounded-lg bg-[#22c55e]/10 text-[#22c55e] hover:text-white hover:bg-[#22c55e] transition-all" title="Approve Comic">
-                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
-                                                    </button>
-                                                )}
-                                                <button onClick={() => openShare(comic)} className="p-2 rounded-lg bg-blue-500/10 text-[#60a5fa] hover:text-white hover:bg-blue-500 transition-all" title="Share Access">
-                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-                                                </button>
-                                                <button onClick={() => generateAiMeta(comic.id)} className="p-2 rounded-lg bg-purple-500/10 text-[#c084fc] hover:text-white hover:bg-purple-500 transition-all shadow-lg" title="Generate AI Summary & Tags">
-                                                    ✨
-                                                </button>
-                                                <Link
-                                                    href={route('admin.comics.regenerate-thumbnail', comic.id)}
-                                                    method="post" as="button" preserveScroll
-                                                    className="p-2 rounded-lg bg-white/10 text-[#cbd5e1] hover:text-white hover:bg-[#e8003d] transition-all font-bold text-[10px] uppercase tracking-tighter"
-                                                    title="Regenerate Thumbnail"
-                                                >
-                                                    TMB
+                                                <ActionBtn onClick={() => { setSharingComic(comic); setShareUserId(''); }} title="Share" variant="blue"><ShareIcon /></ActionBtn>
+                                                <ActionBtn onClick={() => generateAiMeta(comic.id)} title="AI Tag" variant="purple">✦</ActionBtn>
+                                                <Link href={route('admin.comics.regenerate-thumbnail', comic.id)} method="post" as="button" preserveScroll>
+                                                    <ActionBtn title="Regen Thumbnail">
+                                                        <span className="text-[9px] font-black tracking-tighter">TMB</span>
+                                                    </ActionBtn>
                                                 </Link>
-                                                <button onClick={() => handleEdit(comic)} className="p-2 rounded-lg bg-white/10 text-[#cbd5e1] hover:text-white hover:bg-white/20 transition-all font-bold" title="Edit Comic">
-                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                                </button>
-                                                <button 
-                                                    onClick={() => syncPost(route('admin.comics.toggle-visibility', comic.id), { preserveScroll: true })} 
-                                                    className={`p-2 rounded-lg transition-all font-bold ${comic.is_hidden ? 'bg-[#f87171]/20 text-[#f87171] hover:text-white hover:bg-[#f87171]' : 'bg-white/10 text-[#cbd5e1] hover:text-white hover:bg-white/20'}`}
-                                                    title={comic.is_hidden ? 'Unhide' : 'Hide'}
-                                                >
-                                                    {comic.is_hidden ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg> : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
-                                                </button>
+                                                <ActionBtn onClick={() => handleEdit(comic)} title="Edit"><EditIcon /></ActionBtn>
+                                                <ActionBtn onClick={() => syncPost(route('admin.comics.toggle-visibility', comic.id), { preserveScroll: true })} title={comic.is_hidden ? 'Unhide' : 'Hide'} variant={comic.is_hidden ? 'red' : 'ghost'}>
+                                                    {comic.is_hidden ? <EyeOffIcon /> : <EyeIcon />}
+                                                </ActionBtn>
                                             </div>
                                         </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
-                        <div className="mt-8 flex justify-center">
-                            <Pagination links={comics.links} />
-                        </div>
+                    </div>
+
+                    {/* Pagination */}
+                    <div className="px-6 py-4 flex justify-between items-center" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        <span className="text-[11px] text-[#44445a] uppercase tracking-wider">
+                            {comics.total} comics total
+                        </span>
+                        <Pagination links={comics.links} />
                     </div>
                 </div>
             </div>
 
-            {/* Edit Comic Modal */}
+            {/* ── EDIT MODAL ─────────────────────────────────────────── */}
             {editingComic && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => { setEditingComic(null); resetEdit(); }} />
-                    <div className="relative bg-[#111118] border border-[#e8003d]/30 rounded-2xl p-8 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-2xl font-['Bebas_Neue'] tracking-widest text-white">Edit Comic: <span className="text-[#e8003d]">{editingComic.title}</span></h2>
-                            <button onClick={() => { setEditingComic(null); resetEdit(); }} className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center text-[#8888a0] hover:text-white">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={() => { setEditingComic(null); resetEdit(); }} />
+                    <div className="relative rounded-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto shadow-2xl"
+                        style={{ background: '#0f0f1a', border: '1px solid rgba(232,0,61,0.25)' }}>
+                        <div className="flex items-center justify-between px-8 py-5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                            <h2 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, letterSpacing: 2, color: '#fff' }}>
+                                Edit <span style={{ color: '#e8003d' }}>{editingComic.title}</span>
+                            </h2>
+                            <button onClick={() => { setEditingComic(null); resetEdit(); }}
+                                className="w-8 h-8 rounded-full flex items-center justify-center text-[#666688] hover:text-white hover:bg-white/10 transition-all">
+                                <XIcon />
                             </button>
                         </div>
-                        <form onSubmit={submitUpdate} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <div className="flex flex-col gap-6">
-                                <div className="flex flex-col gap-2">
-                                    <label className="text-[11px] tracking-widest uppercase font-bold text-[#a0a0b8]">Title</label>
-                                    <input type="text" value={editData.title} onChange={e => setEditData('title', e.target.value)} className="bg-[#0c0c12] border border-white/10 text-white rounded-lg p-3 outline-none focus:border-[#e8003d] transition-colors" />
-                                    {editErrors.title && <span className="text-[#e8003d] text-xs">{editErrors.title}</span>}
-                                </div>
-                                <div className="flex flex-col gap-2">
-                                    <label className="text-[11px] tracking-widest uppercase font-bold text-[#a0a0b8]">Shelves</label>
-                                    <div className="bg-[#0c0c12] border border-white/10 rounded-lg p-4 h-[120px] overflow-y-auto flex flex-col gap-2">
-                                        {shelves.map(s => (
-                                            <label key={s.id} className="flex items-center gap-3 cursor-pointer group">
-                                                <div onClick={() => toggleShelf(s.id)} className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${(editData.shelf_ids || []).includes(s.id) ? 'bg-[#e8003d] border-[#e8003d]' : 'border-white/20 group-hover:border-white/40'}`}>
-                                                    {(editData.shelf_ids || []).includes(s.id) && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12" /></svg>}
-                                                </div>
-                                                <span className={`text-[13px] ${(editData.shelf_ids || []).includes(s.id) ? 'text-white font-medium' : 'text-[#a0a0b8]'}`}>{s.name}</span>
-                                            </label>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className="flex flex-col gap-2">
-                                    <label className="text-[11px] tracking-widest uppercase font-bold text-[#a0a0b8]">Visibility</label>
-                                    <div className="flex flex-col gap-3 mt-1">
-                                        <label className="flex items-center gap-3 cursor-pointer group">
-                                            <input type="checkbox" checked={editData.is_hidden} onChange={e => setEditData('is_hidden', e.target.checked)} className="hidden" />
-                                            <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${editData.is_hidden ? 'bg-[#e8003d] border-[#e8003d]' : 'border-white/20 group-hover:border-white/40'}`}>
-                                                {editData.is_hidden && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12" /></svg>}
-                                            </div>
-                                            <span className="text-[13px] text-[#a0a0b8] group-hover:text-white transition-colors">Hidden from Public</span>
-                                        </label>
- 
-                                        <label className="flex items-center gap-3 cursor-pointer group">
-                                            <input type="checkbox" checked={editData.is_personal} onChange={e => setEditData('is_personal', e.target.checked)} className="hidden" />
-                                            <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${editData.is_personal ? 'bg-blue-500 border-blue-500' : 'border-white/20 group-hover:border-white/40'}`}>
-                                                {editData.is_personal && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12" /></svg>}
-                                            </div>
-                                            <span className="text-[13px] text-[#a0a0b8] group-hover:text-white transition-colors">Personal PDF (Private)</span>
-                                        </label>
 
-                                        <label className="flex items-center gap-3 cursor-pointer group">
-                                            <input type="checkbox" checked={editData.is_approved} onChange={e => setEditData('is_approved', e.target.checked)} className="hidden" />
-                                            <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${editData.is_approved ? 'bg-green-500 border-green-500' : 'border-white/20 group-hover:border-white/40'}`}>
-                                                {editData.is_approved && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12" /></svg>}
-                                            </div>
-                                            <span className="text-[13px] text-[#a0a0b8] group-hover:text-white transition-colors">Admin Approved</span>
-                                        </label>
-                                    </div>
-                                </div>
-                                <div className="flex flex-col gap-2">
-                                    <label className="text-[11px] tracking-widest uppercase font-bold text-[#a0a0b8]">Optional Thumbnail (JPG/PNG)</label>
-                                    <input
-                                        type="file"
-                                        onChange={(e) => setEditData('thumbnail', e.target.files[0])}
-                                        className="block w-full text-xs text-[#a0a0b8] file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-white/5 file:text-white hover:file:bg-white/10"
-                                    />
-                                    {editErrors.thumbnail && <div className="text-[#e8003d] text-xs mt-1">{editErrors.thumbnail}</div>}
-                                </div>
+                        <form onSubmit={submitUpdate} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Title */}
+                            <div className="md:col-span-2 flex flex-col gap-1.5">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-[#666688]">Title</label>
+                                <input type="text" value={editData.title} onChange={e => setEditData('title', e.target.value)}
+                                    className="bg-white/4 border border-white/10 text-white rounded-lg px-4 py-2.5 outline-none focus:border-[#e8003d]/60 transition-colors text-sm"
+                                    style={{ fontFamily: 'inherit' }} />
+                                {editErrors.title && <span className="text-[#e8003d] text-xs">{editErrors.title}</span>}
                             </div>
-                            <div className="flex flex-col gap-2">
-                                    <label className="text-[11px] tracking-widest uppercase font-bold text-[#a0a0b8]">Categories</label>
-                                    <div className="bg-[#0c0c12] border border-white/10 rounded-lg p-4 h-[200px] overflow-y-auto flex flex-col gap-2">
-                                        {categories.map(cat => (
-                                        <label key={cat.id} className="flex items-center gap-3 cursor-pointer group">
-                                            <div onClick={() => toggleCategory(cat.id)} className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${editData.category_ids.includes(cat.id) ? 'bg-[#e8003d] border-[#e8003d]' : 'border-white/20 group-hover:border-white/40'}`}>
-                                                {editData.category_ids.includes(cat.id) && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12" /></svg>}
-                                            </div>
-                                            <span className={`text-[13px] ${editData.category_ids.includes(cat.id) ? 'text-white font-medium' : 'text-[#a0a0b8]'}`}>{cat.name}</span>
+
+                            {/* Shelves */}
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-[#666688]">Shelves</label>
+                                <div className="rounded-lg p-3 flex flex-col gap-1.5 overflow-y-auto" style={{ height: 120, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                                    {shelves.map(s => (
+                                        <label key={s.id} className="flex items-center gap-2.5 cursor-pointer">
+                                            <Checkbox checked={(editData.shelf_ids || []).includes(s.id)} onChange={() => toggle('shelf_ids', s.id)} />
+                                            <span className="text-[12px] text-[#8888a0]">{s.name}</span>
                                         </label>
                                     ))}
                                 </div>
                             </div>
-                            <div className="md:col-span-2 flex gap-3">
-                                <button type="submit" disabled={updating} className="bg-[#e8003d] text-white px-10 py-3 rounded-lg font-bold text-[13px] tracking-widest uppercase hover:bg-[#ff0044] transition-all disabled:opacity-50">
-                                    {updating ? 'Updating...' : 'Save Changes'}
+
+                            {/* Categories */}
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-[#666688]">Categories</label>
+                                <div className="rounded-lg p-3 flex flex-col gap-1.5 overflow-y-auto" style={{ height: 120, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                                    {categories.map(cat => (
+                                        <label key={cat.id} className="flex items-center gap-2.5 cursor-pointer">
+                                            <Checkbox checked={editData.category_ids.includes(cat.id)} onChange={() => toggle('category_ids', cat.id)} />
+                                            <span className="text-[12px] text-[#8888a0]">{cat.name}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Visibility flags */}
+                            <div className="flex flex-col gap-3">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-[#666688]">Visibility</label>
+                                {[
+                                    ['is_hidden', 'Hidden from Public', '#e8003d'],
+                                    ['is_personal', 'Personal (Private)', '#3b82f6'],
+                                    ['is_approved', 'Admin Approved', '#22c55e'],
+                                ].map(([key, label, color]) => (
+                                    <label key={key} className="flex items-center gap-2.5 cursor-pointer">
+                                        <Checkbox checked={editData[key]} onChange={() => setEditData(key, !editData[key])} color={color} />
+                                        <span className="text-[12px] text-[#8888a0]">{label}</span>
+                                    </label>
+                                ))}
+                            </div>
+
+                            {/* Thumbnail */}
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-[#666688]">Replace Thumbnail</label>
+                                <input type="file" onChange={e => setEditData('thumbnail', e.target.files[0])}
+                                    className="text-xs text-[#8888a0] file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-white/8 file:text-white hover:file:bg-white/12" />
+                                {editErrors.thumbnail && <span className="text-[#e8003d] text-xs">{editErrors.thumbnail}</span>}
+                            </div>
+
+                            {/* Buttons */}
+                            <div className="md:col-span-2 flex gap-3 pt-2">
+                                <button type="submit" disabled={updating}
+                                    className="px-8 py-2.5 rounded-lg font-bold text-[12px] uppercase tracking-widest text-white disabled:opacity-50 transition-all hover:brightness-110"
+                                    style={{ background: '#e8003d' }}>
+                                    {updating ? 'Saving…' : 'Save Changes'}
                                 </button>
-                                <button type="button" onClick={() => { setEditingComic(null); resetEdit(); }} className="bg-white/5 border border-white/10 text-white px-10 py-3 rounded-lg font-bold text-[13px] tracking-widest uppercase hover:bg-white/10 transition-all">
+                                <button type="button" onClick={() => { setEditingComic(null); resetEdit(); }}
+                                    className="px-8 py-2.5 rounded-lg font-bold text-[12px] uppercase tracking-widest text-[#888] hover:text-white hover:bg-white/8 transition-all border border-white/10">
                                     Cancel
                                 </button>
                             </div>
@@ -738,94 +640,73 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                 </div>
             )}
 
-            {/* Share Comic Modal */}
+            {/* ── SHARE MODAL ────────────────────────────────────────── */}
             {sharingComic && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setSharingComic(null)} />
-                    <div className="relative bg-[#111118] border border-blue-500/30 rounded-2xl p-8 w-full max-w-md shadow-2xl">
-                        <h2 className="text-xl font-['Bebas_Neue'] tracking-widest text-white mb-1">Share Comic</h2>
-                        <p className="text-[#8888a0] text-sm mb-6">Grant a specific user access to <span className="text-white font-semibold">{sharingComic.title}</span> even when it's hidden.</p>
-
-                        {/* Current shares */}
-                        {sharingComic.shared_with?.length > 0 && (
-                            <div className="mb-5">
-                                <p className="text-[11px] uppercase tracking-widest text-[#55556a] mb-2 font-bold">Currently Shared With</p>
-                                <div className="flex flex-wrap gap-2">
-                                    {sharingComic.shared_with.map(u => (
-                                        <span key={u.id} className="flex items-center gap-2 text-sm bg-[#e8003d]/10 text-[#e8003d] border border-[#e8003d]/20 px-3 py-1 rounded-full">
-                                            {u.name}
-                                            <button onClick={() => { revokeShare(sharingComic, u.id); setSharingComic(null); }} className="hover:text-white">✕</button>
-                                        </span>
-                                    ))}
-                                </div>
+                    <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={() => setSharingComic(null)} />
+                    <div className="relative rounded-2xl w-full max-w-md shadow-2xl"
+                        style={{ background: '#0f0f1a', border: '1px solid rgba(59,130,246,0.25)' }}>
+                        <div className="flex items-center justify-between px-7 py-5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                            <div>
+                                <h2 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, letterSpacing: 2, color: '#fff' }}>Share Comic</h2>
+                                <p className="text-[11px] text-[#666688] mt-0.5">{sharingComic.title}</p>
                             </div>
-                        )}
+                            <button onClick={() => setSharingComic(null)} className="w-8 h-8 rounded-full flex items-center justify-center text-[#666688] hover:text-white hover:bg-white/10 transition-all"><XIcon /></button>
+                        </div>
 
-                        <div className="flex flex-col gap-6">
-                            <div className="flex flex-col gap-3">
-                                <label className="text-[11px] uppercase tracking-widest font-bold text-[#8888a0]">Shared with Users</label>
-                                <div className="flex flex-wrap gap-2 mb-2">
+                        <div className="p-7 flex flex-col gap-6">
+                            {/* Users */}
+                            <div className="flex flex-col gap-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-[#666688]">Users</label>
+                                <div className="flex flex-wrap gap-1.5 mb-1">
                                     {sharingComic.shared_with?.map(u => (
-                                        <span key={u.id} className="flex items-center gap-2 text-[11px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 px-3 py-1 rounded-full">
+                                        <span key={u.id} className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1 rounded-full"
+                                            style={{ background: 'rgba(59,130,246,0.12)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.25)' }}>
                                             {u.name}
-                                            <button onClick={() => revokeShare(sharingComic, u.id)} className="hover:text-white transition-colors">✕</button>
+                                            <button onClick={() => revokeShare(sharingComic, u.id)} className="hover:text-white transition-colors"><XIcon size={9} /></button>
                                         </span>
                                     ))}
                                 </div>
-                                <select 
-                                    value={shareUserId} 
-                                    onChange={e => {
-                                        const uid = e.target.value;
-                                        if (uid) {
-                                            router.post(route('admin.comics.share', sharingComic.id), { user_id: uid }, { preserveScroll: true });
-                                            setShareUserId('');
-                                        }
-                                    }} 
-                                    className="bg-[#0c0c12] border border-white/10 text-white rounded-lg p-3 outline-none focus:border-blue-500 transition-colors text-sm"
-                                >
-                                    <option value="">Grant user access...</option>
+                                <select value={shareUserId} onChange={e => { const uid = e.target.value; if (uid) { router.post(route('admin.comics.share', sharingComic.id), { user_id: uid }, { preserveScroll: true }); setShareUserId(''); } }}
+                                    className="bg-white/4 border border-white/10 text-white text-sm rounded-lg px-3 py-2 outline-none focus:border-blue-500/50 transition-colors">
+                                    <option value="">Grant user access…</option>
                                     {users.filter(u => !sharingComic.shared_with?.find(s => s.id === u.id)).map(u => (
                                         <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
                                     ))}
                                 </select>
                             </div>
 
-                            <div className="flex flex-col gap-3">
-                                <label className="text-[11px] uppercase tracking-widest font-bold text-[#8888a0]">Shared with Roles</label>
-                                <div className="flex flex-wrap gap-2 mb-2">
+                            {/* Roles */}
+                            <div className="flex flex-col gap-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-[#666688]">Roles</label>
+                                <div className="flex flex-wrap gap-1.5 mb-1">
                                     {sharingComic.shared_roles?.map(r => (
-                                        <span key={r.id} className="flex items-center gap-2 text-[11px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20 px-3 py-1 rounded-full">
+                                        <span key={r.id} className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1 rounded-full"
+                                            style={{ background: 'rgba(168,85,247,0.12)', color: '#c084fc', border: '1px solid rgba(168,85,247,0.25)' }}>
                                             {r.name}
-                                            <button onClick={() => revokeRoleShare(sharingComic, r.id)} className="hover:text-white transition-colors">✕</button>
+                                            <button onClick={() => revokeRoleShare(sharingComic, r.id)} className="hover:text-white transition-colors"><XIcon size={9} /></button>
                                         </span>
                                     ))}
                                 </div>
-                                <select 
-                                    onChange={e => {
-                                        const rid = e.target.value;
-                                        if (rid) {
-                                            submitRoleShare(rid);
-                                            e.target.value = '';
-                                        }
-                                    }} 
-                                    className="bg-[#0c0c12] border border-white/10 text-white rounded-lg p-3 outline-none focus:border-purple-500 transition-colors text-sm"
-                                >
-                                    <option value="">Grant role access...</option>
+                                <select onChange={e => { const rid = e.target.value; if (rid) { submitRoleShare(rid); e.target.value = ''; } }}
+                                    className="bg-white/4 border border-white/10 text-white text-sm rounded-lg px-3 py-2 outline-none focus:border-purple-500/50 transition-colors">
+                                    <option value="">Grant role access…</option>
                                     {roles.filter(r => !sharingComic.shared_roles?.find(s => s.id === r.id)).map(r => (
                                         <option key={r.id} value={r.id}>{r.name}</option>
                                     ))}
                                 </select>
                             </div>
 
-                            <button onClick={() => setSharingComic(null)} className="w-full bg-white/5 text-white py-3 rounded-lg font-bold text-sm uppercase tracking-widest hover:bg-white/10 transition mt-2">
-                                Close
+                            <button onClick={() => setSharingComic(null)}
+                                className="w-full py-2.5 rounded-lg font-bold text-[12px] uppercase tracking-widest text-[#888] hover:text-white border border-white/10 hover:bg-white/8 transition-all">
+                                Done
                             </button>
                         </div>
                     </div>
                 </div>
             )}
 
-            <ConfirmModal 
+            <ConfirmModal
                 isOpen={confirmConfig.isOpen}
                 title={confirmConfig.title}
                 message={confirmConfig.message}
