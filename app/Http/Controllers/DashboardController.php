@@ -15,10 +15,10 @@ class DashboardController extends Controller
             'totalComics'  => Comic::count(),
             'hiddenComics' => Comic::where('is_hidden', true)->count(),
             'totalUsers'   => User::count(),
-            'readEvents'   => \DB::table('comic_user')->count(),
+            'readEvents'   => DB::table('comic_user')->count(),
         ];
 
-        $recentComics = Comic::with('shelf')
+        $recentComics = Comic::with('shelves')
             ->latest()
             ->take(10)
             ->get()
@@ -26,7 +26,7 @@ class DashboardController extends Controller
                 'id'        => $c->id,
                 'title'     => $c->title,
                 'is_hidden' => $c->is_hidden,
-                'shelf'     => $c->shelf?->name,
+                'shelf'     => $c->shelves->pluck('name')->join(', '),
                 'added'     => $c->created_at?->diffForHumans(),
             ]);
 

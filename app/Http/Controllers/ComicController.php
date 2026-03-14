@@ -234,7 +234,7 @@ class ComicController extends Controller
     // Admin Methods
     public function adminIndex(Request $request)
     {
-        $query = Comic::with('shelf', 'categories', 'sharedWith', 'uploader')->withCount('readers')->latest();
+        $query = Comic::with('shelves', 'categories', 'sharedWith', 'uploader')->withCount('readers')->latest();
 
         // Approval filter
         if ($request->get('approval') === 'pending') {
@@ -267,8 +267,7 @@ class ComicController extends Controller
             'is_approved'   => (bool) $comic->is_approved,
             'user_id'       => $comic->user_id,
             'uploader'      => $comic->uploader ? ['name' => $comic->uploader->name] : null,
-            'shelf_id'      => $comic->shelf_id,
-            'shelf'         => $comic->shelf,
+            'shelves'       => $comic->shelves,
             'categories'    => $comic->categories,
             'readers_count' => $comic->readers_count,
             'shared_with'   => $comic->sharedWith->map(fn($u) => ['id' => $u->id, 'name' => $u->name, 'email' => $u->email]),
@@ -295,7 +294,8 @@ class ComicController extends Controller
     {
         $request->validate([
             'title' => 'required|string|max:255',
-            'shelf_id' => 'nullable|exists:shelves,id',
+            'shelf_ids' => 'nullable|array',
+            'shelf_ids.*' => 'exists:shelves,id',
             'category_ids' => 'nullable|array',
             'category_ids.*' => 'exists:categories,id',
             'is_hidden' => 'required|boolean',
@@ -306,7 +306,6 @@ class ComicController extends Controller
 
         $data = [
             'title' => $request->title,
-            'shelf_id' => $request->shelf_id,
             'is_hidden' => $request->is_hidden,
             'is_personal' => $request->is_personal,
             'is_approved' => $request->is_approved,
@@ -323,6 +322,7 @@ class ComicController extends Controller
         $comic->update($data);
 
         $comic->categories()->sync($request->category_ids ?? []);
+        $comic->shelves()->sync($request->shelf_ids ?? []);
 
         return back()->with('success', 'Comic updated successfully.');
     }
@@ -339,6 +339,8 @@ class ComicController extends Controller
             'comic' => 'required|file|mimes:pdf|max:102400', // 100MB limit
             'is_personal' => 'nullable|boolean',
             'thumbnail' => 'nullable|image|max:2048',
+            'shelf_ids' => 'nullable|array',
+            'shelf_ids.*' => 'exists:shelves,id',
         ]);
 
         $file = $request->file('comic');
@@ -369,6 +371,10 @@ class ComicController extends Controller
         }
 
         $comic = Comic::create($data);
+
+        if ($request->has('shelf_ids')) {
+            $comic->shelves()->sync($request->shelf_ids);
+        }
 
         // Generate thumbnail if not provided
         $thumbnailStatus = '';

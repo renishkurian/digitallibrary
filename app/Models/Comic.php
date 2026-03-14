@@ -19,6 +19,7 @@ class Comic extends Model
         'is_common',
         'is_approved',
         'user_id',
+        'shelf_id',
         'ai_summary',
         'rating',
         'tags',
@@ -54,9 +55,9 @@ class Comic extends Model
             ->withTimestamps();
     }
 
-    public function shelf()
+    public function shelves()
     {
-        return $this->belongsTo(Shelf::class);
+        return $this->belongsToMany(Shelf::class);
     }
 
     public function categories()

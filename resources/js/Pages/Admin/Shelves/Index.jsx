@@ -13,6 +13,7 @@ export default function Index({ shelves }) {
     const { data, setData, post, put, delete: destroy, processing, errors, reset } = useForm({
         name: '',
         description: '',
+        parent_id: '',
         is_hidden: false,
         is_common: true,
     });
@@ -38,6 +39,7 @@ export default function Index({ shelves }) {
         setData({
             name: shelf.name,
             description: shelf.description || '',
+            parent_id: shelf.parent_id || '',
             is_hidden: shelf.is_hidden,
             is_common: shelf.is_common,
         });
@@ -79,12 +81,27 @@ export default function Index({ shelves }) {
                         </div>
 
                         <div className="flex flex-col gap-2">
+                            <label className="text-[11px] tracking-widest uppercase font-bold text-[#8888a0]">Parent Shelf</label>
+                            <select 
+                                value={data.parent_id}
+                                onChange={e => setData('parent_id', e.target.value)}
+                                className="bg-[#0c0c12] border border-white/10 text-white rounded-lg p-3 outline-none focus:border-[#e8003d] transition-colors"
+                            >
+                                <option value="">None (Top Level)</option>
+                                {shelves.filter(s => !editingShelf || s.id !== editingShelf.id).map(s => (
+                                    <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
+                            </select>
+                            {errors.parent_id && <span className="text-[#e8003d] text-xs">{errors.parent_id}</span>}
+                        </div>
+
+                        <div className="md:col-span-2 flex flex-col gap-2">
                             <label className="text-[11px] tracking-widest uppercase font-bold text-[#8888a0]">Visibility & Ownership</label>
-                            <div className="flex flex-col gap-4 mt-1">
+                            <div className="flex items-center gap-6 mt-1">
                                 <select 
                                     value={data.is_hidden ? '1' : '0'}
                                     onChange={e => setData('is_hidden', e.target.value === '1')}
-                                    className="bg-[#0c0c12] border border-white/10 text-white rounded-lg p-3 outline-none focus:border-[#e8003d] transition-colors text-sm"
+                                    className="bg-[#0c0c12] border border-white/10 text-white rounded-lg py-2 px-4 outline-none focus:border-[#e8003d] transition-colors text-sm w-48"
                                 >
                                     <option value="0">Public / Shared</option>
                                     <option value="1">Hidden (Admin Only)</option>
@@ -155,6 +172,11 @@ export default function Index({ shelves }) {
                                         <td className="py-4 font-bold text-white group-hover:text-[#e8003d] transition-colors">
                                             <div className="flex flex-col">
                                                 <span>{shelf.name}</span>
+                                                {shelf.parent && (
+                                                    <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest mt-1">
+                                                        ↳ Under {shelf.parent.name}
+                                                    </span>
+                                                )}
                                                 <span className="text-[10px] text-[#55556a] font-normal normal-case mt-0.5 line-clamp-1">{shelf.description || 'No description'}</span>
                                             </div>
                                         </td>

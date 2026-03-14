@@ -43,10 +43,10 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
         comic: null, 
         is_personal: false,
         generate_ai: true,
-        thumbnail: null 
+        thumbnail: null, shelf_ids: [] 
     });
     const { data: editData, setData: setEditData, post: postUpdate, processing: updating, errors: editErrors, reset: resetEdit } = useForm({
-        title: '', shelf_id: '', category_ids: [], is_hidden: false, is_personal: false, is_approved: false, thumbnail: null
+        title: '', shelf_ids: [], category_ids: [], is_hidden: false, is_personal: false, is_approved: false, thumbnail: null
     });
     const { post: syncPost, processing: syncProcessing } = useForm();
 
@@ -67,7 +67,7 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
         setEditingComic(comic);
         setEditData({
             title:        comic.title,
-            shelf_id:     comic.shelf_id || '',
+            shelf_ids:    comic.shelves ? comic.shelves.map(s => s.id) : [],
             category_ids: comic.categories.map(c => c.id),
             is_hidden:    comic.is_hidden,
             is_personal:  comic.is_personal,
@@ -88,6 +88,20 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
         const index  = ids.indexOf(id);
         if (index > -1) ids.splice(index, 1); else ids.push(id);
         setEditData('category_ids', ids);
+    };
+
+    const toggleShelf = (id) => {
+        const ids    = [...(editData.shelf_ids || [])];
+        const index  = ids.indexOf(id);
+        if (index > -1) ids.splice(index, 1); else ids.push(id);
+        setEditData('shelf_ids', ids);
+    };
+
+    const toggleUploadShelf = (id) => {
+        const ids = [...(uploadData.shelf_ids || [])];
+        const index = ids.indexOf(id);
+        if (index > -1) ids.splice(index, 1); else ids.push(id);
+        setUploadData('shelf_ids', ids);
     };
 
     const openShare = (comic) => { setSharingComic(comic); setShareUserId(''); };
@@ -275,6 +289,20 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                             </div>
 
                             <div className="flex flex-col gap-2 mb-5">
+                                <label className="text-[11px] tracking-widest uppercase font-bold text-[#8888a0]">Assign to Shelves</label>
+                                <div className="bg-[#0c0c12] border border-white/10 rounded-lg p-3 h-32 overflow-y-auto flex flex-col gap-2">
+                                    {shelves.map(s => (
+                                        <label key={s.id} className="flex items-center gap-3 cursor-pointer group">
+                                            <div onClick={() => toggleUploadShelf(s.id)} className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${uploadData.shelf_ids.includes(s.id) ? 'bg-[#e8003d] border-[#e8003d]' : 'border-white/20 group-hover:border-white/40'}`}>
+                                                {uploadData.shelf_ids.includes(s.id) && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12" /></svg>}
+                                            </div>
+                                            <span className={`text-[12px] ${uploadData.shelf_ids.includes(s.id) ? 'text-white' : 'text-[#8888a0]'}`}>{s.name}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-2 mb-5">
                                 <label className="text-[11px] tracking-widest uppercase font-bold text-[#8888a0]">Optional Thumbnail (JPG/PNG)</label>
                                 <input
                                     type="file"
@@ -396,6 +424,7 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                                             className="w-4 h-4 rounded border-white/20 bg-white/5 text-[#e8003d] focus:ring-[#e8003d] focus:ring-offset-0"
                                         />
                                     </th>
+                                    <th className="w-10 px-4 py-4 text-left text-[11px] font-black text-[#a0a0b8] uppercase tracking-widest whitespace-nowrap">Tmb</th>
                                     {['Comic', 'Shelf', 'Categories', 'Status', 'Shared With', 'Uploaded By', 'Actions'].map(h => (
                                         <th key={h} className={`px-4 py-4 text-left text-[11px] font-black text-[#a0a0b8] uppercase tracking-widest whitespace-nowrap ${h === 'Actions' ? 'text-right' : ''}`}>{h}</th>
                                     ))}
@@ -413,17 +442,30 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                                             />
                                         </td>
                                         <td className="px-4 py-4">
+                                            <Link href={route('comics.show', comic.id)} target="_blank" className="block w-10 h-14 rounded overflow-hidden bg-white/5 border border-white/10 shrink-0 hover:border-[#ff3366] transition-colors">
+                                                {comic.thumbnail ? (
+                                                    <img src={`/thumbs/${comic.thumbnail}`} className="w-full h-full object-cover" alt="" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-[10px] text-[#55556a]">NA</div>
+                                                )}
+                                            </Link>
+                                        </td>
+                                        <td className="px-4 py-4">
                                             <div className="flex flex-col">
-                                                <span className="text-white font-bold group-hover:text-[#ff3366] transition-colors text-sm flex items-center gap-2">
+                                                <Link href={route('comics.show', comic.id)} target="_blank" className="text-white font-bold hover:text-[#ff3366] transition-colors text-sm flex items-center gap-2">
                                                     {comic.title}
                                                     {comic.is_personal && <span className="text-[10px] bg-blue-500/20 text-[#60a5fa] px-1.5 py-0.5 rounded border border-blue-500/30 uppercase tracking-tighter">Personal</span>}
-                                                </span>
+                                                </Link>
                                                 <span className="text-[10px] text-[#a0a0b8] font-mono mt-0.5 truncate max-w-[200px]">{comic.path}</span>
                                             </div>
                                         </td>
                                         <td className="px-4 py-4 text-sm font-medium">
-                                            {comic.shelf
-                                                ? <span className="text-[#e2e8f0]">{comic.shelf.name}</span>
+                                            {comic.shelves && comic.shelves.length > 0
+                                                ? <div className="flex flex-col gap-0.5">
+                                                    {comic.shelves.map(s => (
+                                                        <span key={s.id} className="text-[#e2e8f0] text-xs">{s.name}</span>
+                                                    ))}
+                                                  </div>
                                                 : <span className="text-[10px] uppercase tracking-widest text-[#64748b] font-black">None</span>
                                             }
                                         </td>
@@ -533,11 +575,17 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                                     {editErrors.title && <span className="text-[#e8003d] text-xs">{editErrors.title}</span>}
                                 </div>
                                 <div className="flex flex-col gap-2">
-                                    <label className="text-[11px] tracking-widest uppercase font-bold text-[#a0a0b8]">Shelf</label>
-                                    <select value={editData.shelf_id} onChange={e => setEditData('shelf_id', e.target.value)} className="bg-[#0c0c12] border border-white/10 text-white rounded-lg p-3 outline-none focus:border-[#e8003d] transition-colors">
-                                        <option value="">No Shelf</option>
-                                        {shelves.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                    </select>
+                                    <label className="text-[11px] tracking-widest uppercase font-bold text-[#a0a0b8]">Shelves</label>
+                                    <div className="bg-[#0c0c12] border border-white/10 rounded-lg p-4 h-[120px] overflow-y-auto flex flex-col gap-2">
+                                        {shelves.map(s => (
+                                            <label key={s.id} className="flex items-center gap-3 cursor-pointer group">
+                                                <div onClick={() => toggleShelf(s.id)} className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${(editData.shelf_ids || []).includes(s.id) ? 'bg-[#e8003d] border-[#e8003d]' : 'border-white/20 group-hover:border-white/40'}`}>
+                                                    {(editData.shelf_ids || []).includes(s.id) && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12" /></svg>}
+                                                </div>
+                                                <span className={`text-[13px] ${(editData.shelf_ids || []).includes(s.id) ? 'text-white font-medium' : 'text-[#a0a0b8]'}`}>{s.name}</span>
+                                            </label>
+                                        ))}
+                                    </div>
                                 </div>
                                 <div className="flex flex-col gap-2">
                                     <label className="text-[11px] tracking-widest uppercase font-bold text-[#a0a0b8]">Visibility</label>
@@ -578,9 +626,9 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                                 </div>
                             </div>
                             <div className="flex flex-col gap-2">
-                                <label className="text-[11px] tracking-widest uppercase font-bold text-[#a0a0b8]">Categories</label>
-                                <div className="bg-[#0c0c12] border border-white/10 rounded-lg p-4 h-[300px] overflow-y-auto flex flex-col gap-2">
-                                    {categories.map(cat => (
+                                    <label className="text-[11px] tracking-widest uppercase font-bold text-[#a0a0b8]">Categories</label>
+                                    <div className="bg-[#0c0c12] border border-white/10 rounded-lg p-4 h-[200px] overflow-y-auto flex flex-col gap-2">
+                                        {categories.map(cat => (
                                         <label key={cat.id} className="flex items-center gap-3 cursor-pointer group">
                                             <div onClick={() => toggleCategory(cat.id)} className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${editData.category_ids.includes(cat.id) ? 'bg-[#e8003d] border-[#e8003d]' : 'border-white/20 group-hover:border-white/40'}`}>
                                                 {editData.category_ids.includes(cat.id) && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12" /></svg>}

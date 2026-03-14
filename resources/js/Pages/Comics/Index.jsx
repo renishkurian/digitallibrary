@@ -8,6 +8,7 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
     const [showSidebar, setShowSidebar] = useState(
         typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
     );
+    const [viewMode, setViewMode] = useState('grid'); // grid or list
 
     // Update default state on resize if needed
     useEffect(() => {
@@ -55,6 +56,23 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
                     <span className="text-[14px] font-['Bebas_Neue'] tracking-[2px] text-[#8888a0] border-l border-white/20 pl-4">
                         <span className="text-[20px] text-white mr-1">{comics.last_page}</span> PAGES
                     </span>
+                </div>
+
+                <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl p-1 shrink-0">
+                    <button 
+                        onClick={() => setViewMode('grid')}
+                        className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-[#e8003d] text-white shadow-lg' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}
+                        title="Grid View"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    </button>
+                    <button 
+                        onClick={() => setViewMode('list')}
+                        className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-[#e8003d] text-white shadow-lg' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}
+                        title="List View (No Thumbnails)"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                    </button>
                 </div>
             </div>
 
@@ -255,9 +273,12 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
                         </div>
                     ) : (
                         <>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4 sm:gap-6">
+                            <div className={viewMode === 'grid' 
+                                ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4 sm:gap-6"
+                                : "flex flex-col gap-3"
+                            }>
                                 {comics.data.map(comic => (
-                                    <ComicCard key={comic.id} comic={comic} auth={auth} />
+                                    <ComicCard key={comic.id} comic={comic} auth={auth} compact={viewMode === 'list'} />
                                 ))}
                             </div>
 

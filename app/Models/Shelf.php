@@ -23,7 +23,32 @@ class Shelf extends Model
 
     public function comics()
     {
-        return $this->hasMany(Comic::class);
+        return $this->belongsToMany(Comic::class);
+    }
+
+    public function parent()
+    {
+        return $this->belongsTo(Shelf::class, 'parent_id');
+    }
+
+    public function children()
+    {
+        return $this->hasMany(Shelf::class, 'parent_id');
+    }
+
+    public function descendants()
+    {
+        return $this->children()->with('descendants');
+    }
+
+    public function getDescendantIds()
+    {
+        $ids = [];
+        foreach ($this->descendants as $child) {
+            $ids[] = $child->id;
+            $ids = array_merge($ids, $child->getDescendantIds());
+        }
+        return $ids;
     }
 
     public function scopeVisible($query, $user = null)

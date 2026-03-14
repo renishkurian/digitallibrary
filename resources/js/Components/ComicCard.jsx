@@ -2,8 +2,57 @@ import { useState } from 'react';
 import { Link } from '@inertiajs/react';
 import { toast } from 'react-hot-toast';
 
-export default function ComicCard({ comic, auth }) {
+export default function ComicCard({ comic, auth, compact = false }) {
     const [showInfo, setShowInfo] = useState(false);
+
+    if (compact) {
+        return (
+            <div className="relative group">
+                <Link href={route('comics.show', comic.id)} className="flex items-center gap-4 bg-[#16161f] border border-white/7 rounded-xl p-3 hover:bg-white/[0.05] hover:border-[#e8003d]/40 transition-all group-hover:-translate-y-0.5">
+                    <div className="flex-1 min-w-0">
+                        <h3 className="text-white font-bold group-hover:text-[#e8003d] transition-colors truncate text-sm flex items-center gap-2">
+                            {comic.title}
+                            {comic.is_personal && <span className="text-[9px] bg-blue-500/10 text-blue-400 px-1 py-0.5 rounded border border-blue-500/20 uppercase shrink-0">Personal</span>}
+                        </h3>
+                        {(() => {
+                            let parsedTags = [];
+                            try {
+                                parsedTags = typeof comic.tags === 'string' ? JSON.parse(comic.tags) : (comic.tags || []);
+                            } catch (e) {
+                                parsedTags = [];
+                            }
+                            return parsedTags.length > 0 && (
+                                <div className="flex gap-1 mt-1 overflow-hidden">
+                                    {parsedTags.slice(0, 3).map((tag, idx) => (
+                                        <span key={idx} className="text-[9px] text-[#8888a0] font-medium">#{tag}</span>
+                                    ))}
+                                </div>
+                            );
+                        })()}
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex items-center gap-1 text-[10px] text-[#55556a] font-bold">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                            <span>{comic.readers_count}</span>
+                        </div>
+                        {auth?.user && (
+                            comic.is_read ? (
+                                <span className="w-2 h-2 rounded-full bg-[#00ff88]" title="Read"></span>
+                            ) : (
+                                <span className="w-2 h-2 rounded-full bg-[#e8003d]" title="Unread"></span>
+                            )
+                        )}
+                        <svg className="w-4 h-4 text-[#55556a] group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </div>
+                </Link>
+            </div>
+        );
+    }
 
     return (
         <div className="card-wrap relative group">

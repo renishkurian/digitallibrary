@@ -20,7 +20,7 @@ class DuplicateController extends Controller
         $search = $request->input('q');
 
         // Fetch all comics that have a visual hash
-        $query = Comic::whereNotNull('visual_hash')->with(['shelf', 'categories']);
+        $query = Comic::whereNotNull('visual_hash')->with(['shelves', 'categories']);
 
         // Narrow the pool to comics matching the search before grouping
         if ($search) {
@@ -86,7 +86,7 @@ class DuplicateController extends Controller
                     'filename'    => $comic->filename,
                     'thumbnail'   => $comic->thumbnail,
                     'is_approved' => $comic->is_approved,
-                    'shelf'       => $comic->shelf?->name ?? 'No Shelf',
+                    'shelf'       => $comic->shelves->pluck('name')->join(', ') ?: 'No Shelf',
                     'size'        => $this->getFileSize($comic->path),
                     'size_bytes'  => $this->getFileSizeBytes($comic->path),
                 ])->values(),

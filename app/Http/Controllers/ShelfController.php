@@ -12,6 +12,7 @@ class ShelfController extends Controller
     public function index()
     {
         $shelves = Shelf::visible(Auth::user())
+            ->whereNull('parent_id')
             ->orderBy('sort_order')
             ->get();
 
@@ -26,7 +27,13 @@ class ShelfController extends Controller
             abort(403);
         }
 
-        $comics = $shelf->comics()
+        $shelf->load('parent');
+
+        $allShelfIds = array_merge([$shelf->id], $shelf->getDescendantIds());
+
+        $comics = \App\Models\Comic::whereHas('shelves', function ($query) use ($allShelfIds) {
+            $query->whereIn('shelves.id', $allShelfIds);
+        })
             ->withCount('readers')
             ->visible()
             ->latest()
@@ -42,15 +49,21 @@ class ShelfController extends Controller
                 'tags' => $comic->tags,
             ]);
 
+        $children = $shelf->children()
+            ->visible(Auth::user())
+            ->orderBy('sort_order')
+            ->get();
+
         return Inertia::render('Shelves/Show', [
             'shelf' => $shelf,
+            'children' => $children,
             'comics' => $comics,
         ]);
     }
 
     public function adminIndex()
     {
-        $shelves = Shelf::with('user')->orderBy('sort_order')->get();
+        $shelves = Shelf::with(['user', 'parent'])->orderBy('sort_order')->get();
 
         return Inertia::render('Admin/Shelves/Index', [
             'shelves' => $shelves,
@@ -62,13 +75,21 @@ class ShelfController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
+            'parent_id' => 'nullable|exists:shelves,id',
             'is_hidden' => 'required|boolean',
             'is_common' => 'boolean',
         ]);
 
+        $name = $request->name;
+        // If name only contains English characters, numbers, and basic punctuation, convert to Title Case
+        if (preg_match('/^[a-zA-Z0-9\s\-_\.,\'"!?()]+$/', $name)) {
+            $name = ucwords(strtolower($name));
+        }
+
         Shelf::create([
-            'name' => $request->name,
+            'name' => $name,
             'description' => $request->description,
+            'parent_id' => $request->parent_id,
             'is_hidden' => $request->is_hidden,
             'is_common' => $request->boolean('is_common', true),
             'user_id' => Auth::id(),
@@ -82,13 +103,26 @@ class ShelfController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
+            'parent_id' => 'nullable|exists:shelves,id',
             'is_hidden' => 'required|boolean',
             'is_common' => 'boolean',
         ]);
 
+        // Prevent self-parenting
+        if ($request->parent_id == $shelf->id) {
+            return back()->with('error', 'A shelf cannot be its own parent.');
+        }
+
+        $name = $request->name;
+        // If name only contains English characters, numbers, and basic punctuation, convert to Title Case
+        if (preg_match('/^[a-zA-Z0-9\s\-_\.,\'"!?()]+$/', $name)) {
+            $name = ucwords(strtolower($name));
+        }
+
         $shelf->update([
-            'name' => $request->name,
+            'name' => $name,
             'description' => $request->description,
+            'parent_id' => $request->parent_id,
             'is_hidden' => $request->is_hidden,
             'is_common' => $request->is_common,
         ]);
