@@ -8,7 +8,7 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
     const [showSidebar, setShowSidebar] = useState(
         typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
     );
-    const [viewMode, setViewMode] = useState('grid'); // grid or list
+    const [viewMode, setViewMode] = useState('grid'); // grid, list, or rack
 
     // Update default state on resize if needed
     useEffect(() => {
@@ -72,6 +72,19 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
                         title="List View (No Thumbnails)"
                     >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                    </button>
+                    <button 
+                        onClick={() => setViewMode('rack')}
+                        className={`p-2 rounded-lg transition-all ${viewMode === 'rack' ? 'bg-[#e8003d] text-white shadow-lg' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}
+                        title="Rack View (Home Library)"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="3" y1="9" x2="21" y2="9"></line>
+                            <line x1="3" y1="15" x2="21" y2="15"></line>
+                            <line x1="9" y1="3" x2="9" y2="21"></line>
+                            <line x1="15" y1="3" x2="15" y2="21"></line>
+                        </svg>
                     </button>
                 </div>
             </div>
@@ -223,9 +236,16 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
                                 <Link 
                                     key={shelf.id}
                                     href={route('comics.index', { ...filters, shelf: shelf.id })}
-                                    className={`text-[13px] py-1.5 px-3 rounded-lg transition-all ${filters.shelf == shelf.id ? 'bg-[#e8003d]/10 text-[#e8003d] font-bold' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}
+                                    className={`text-[13px] py-1.5 px-3 rounded-lg transition-all flex items-center gap-3 ${filters.shelf == shelf.id ? 'bg-[#e8003d]/10 text-[#e8003d] font-bold' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}
                                 >
-                                    {shelf.name}
+                                    <div className="w-6 h-6 rounded overflow-hidden border border-white/10 shrink-0 bg-[#0d0d14]">
+                                        {shelf.cover_image ? (
+                                            <img src={`/shelves/${shelf.cover_image}`} className="w-full h-full object-cover" alt="" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-[8px] text-[#55556a] uppercase font-black">NA</div>
+                                        )}
+                                    </div>
+                                    <span className="truncate">{shelf.name}</span>
                                 </Link>
                             ))}
                         </div>
@@ -273,14 +293,36 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
                         </div>
                     ) : (
                         <>
-                            <div className={viewMode === 'grid' 
-                                ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4 sm:gap-6"
-                                : "flex flex-col gap-3"
-                            }>
-                                {comics.data.map(comic => (
-                                    <ComicCard key={comic.id} comic={comic} auth={auth} compact={viewMode === 'list'} />
-                                ))}
-                            </div>
+                            {viewMode === 'rack' ? (
+                                <div className="flex flex-col gap-12 py-8">
+                                    {Array.from({ length: Math.ceil(comics.data.length / 6) }).map((_, rowIndex) => (
+                                        <div key={rowIndex} className="relative">
+                                            <div className="absolute -bottom-4 left-0 right-0 h-6 bg-gradient-to-b from-[#3d2b1f] to-[#1a120b] rounded-sm shadow-[0_10px_30px_rgba(0,0,0,0.6)] z-0 border-t border-white/5">
+                                                <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/10 opacity-30"></div>
+                                                <div className="absolute bottom-0 left-0 right-0 h-2 bg-black/40"></div>
+                                            </div>
+                                            
+                                            <div className="relative z-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6 sm:gap-8 px-4">
+                                                {comics.data.slice(rowIndex * 6, (rowIndex + 1) * 6).map((comic) => (
+                                                    <div key={comic.id} className="relative [perspective:1000px] group">
+                                                        <ComicCard comic={comic} auth={auth} />
+                                                        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-[80%] h-2 bg-black/60 blur-md rounded-full -z-10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className={viewMode === 'grid' 
+                                    ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4 sm:gap-6"
+                                    : "flex flex-col gap-3"
+                                }>
+                                    {comics.data.map(comic => (
+                                        <ComicCard key={comic.id} comic={comic} auth={auth} compact={viewMode === 'list'} />
+                                    ))}
+                                </div>
+                            )}
 
                             <div className="mt-16 flex justify-center">
                                 <Pagination links={comics.links} />

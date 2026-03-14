@@ -11,6 +11,7 @@ class Shelf extends Model
         'slug',
         'parent_id',
         'description',
+        'cover_image',
         'sort_order',
         'is_common',
         'user_id',

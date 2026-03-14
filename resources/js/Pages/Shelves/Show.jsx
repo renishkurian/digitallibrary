@@ -1,10 +1,11 @@
+import { useState } from 'react';
 import { Head, Link } from '@inertiajs/react';
 import ComicLayout from '@/Layouts/ComicLayout';
 import ComicCard from '@/Components/ComicCard';
 import Pagination from '@/Components/Pagination';
 
 export default function Show({ shelf, children, comics, auth }) {
-    const [viewMode, setViewMode] = useState('grid'); // grid or list
+    const [viewMode, setViewMode] = useState('grid'); // grid, list, or rack
     return (
         <ComicLayout auth={auth} title={shelf.name}>
             <Head title={`${shelf.name} - Shelf`} />
@@ -67,7 +68,7 @@ export default function Show({ shelf, children, comics, auth }) {
                                     <div className="aspect-[16/9] w-full bg-[#0d0d14] relative overflow-hidden">
                                         {child.cover_image ? (
                                             <img 
-                                                src={child.cover_image} 
+                                                src={`/shelves/${child.cover_image}`} 
                                                 alt={child.name} 
                                                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                                             />
@@ -114,6 +115,19 @@ export default function Show({ shelf, children, comics, auth }) {
                                 >
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
                                 </button>
+                                <button 
+                                    onClick={() => setViewMode('rack')}
+                                    className={`p-1.5 rounded-lg transition-all ${viewMode === 'rack' ? 'bg-[#e8003d] text-white shadow-lg' : 'text-[#8888a0] hover:text-white'}`}
+                                    title="Rack View (Home Library)"
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                        <line x1="3" y1="9" x2="21" y2="9"></line>
+                                        <line x1="3" y1="15" x2="21" y2="15"></line>
+                                        <line x1="9" y1="3" x2="9" y2="21"></line>
+                                        <line x1="15" y1="3" x2="15" y2="21"></line>
+                                    </svg>
+                                </button>
                             </div>
                         </div>
                         <span className="text-[11px] tracking-wider text-[#8888a0] font-medium">{comics.total} items</span>
@@ -121,14 +135,40 @@ export default function Show({ shelf, children, comics, auth }) {
 
                     {comics.data.length > 0 ? (
                         <>
-                            <div className={viewMode === 'grid' 
-                            ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6"
-                            : "flex flex-col gap-3"
-                        }>
-                                {comics.data.map((comic) => (
-                                    <ComicCard key={comic.id} comic={comic} auth={auth} compact={viewMode === 'list'} />
-                                ))}
-                            </div>
+                            {viewMode === 'rack' ? (
+                                <div className="flex flex-col gap-12 py-8">
+                                    {/* Split comics into rows of 6 */}
+                                    {Array.from({ length: Math.ceil(comics.data.length / 6) }).map((_, rowIndex) => (
+                                        <div key={rowIndex} className="relative">
+                                            {/* The Rack / Shelf Base */}
+                                            <div className="absolute -bottom-4 left-0 right-0 h-6 bg-gradient-to-b from-[#3d2b1f] to-[#1a120b] rounded-sm shadow-[0_10px_30px_rgba(0,0,0,0.6)] z-0 border-t border-white/5">
+                                                <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/10 opacity-30"></div>
+                                                <div className="absolute bottom-0 left-0 right-0 h-2 bg-black/40"></div>
+                                            </div>
+                                            
+                                            {/* Comics on this Row */}
+                                            <div className="relative z-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6 sm:gap-8 px-4">
+                                                {comics.data.slice(rowIndex * 6, (rowIndex + 1) * 6).map((comic) => (
+                                                    <div key={comic.id} className="relative [perspective:1000px] group">
+                                                        <ComicCard comic={comic} auth={auth} />
+                                                        {/* Subtle shadow on the rack for each book */}
+                                                        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-[80%] h-2 bg-black/60 blur-md rounded-full -z-10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className={viewMode === 'grid' 
+                                    ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6"
+                                    : "flex flex-col gap-3"
+                                }>
+                                    {comics.data.map((comic) => (
+                                        <ComicCard key={comic.id} comic={comic} auth={auth} compact={viewMode === 'list'} />
+                                    ))}
+                                </div>
+                            )}
                             <div className="mt-10">
                                 <Pagination links={comics.links} />
                             </div>

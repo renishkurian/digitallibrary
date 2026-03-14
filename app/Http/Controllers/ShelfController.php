@@ -78,6 +78,7 @@ class ShelfController extends Controller
             'parent_id' => 'nullable|exists:shelves,id',
             'is_hidden' => 'required|boolean',
             'is_common' => 'boolean',
+            'cover_image' => 'nullable|image|max:2048',
         ]);
 
         $name = $request->name;
@@ -86,7 +87,7 @@ class ShelfController extends Controller
             $name = ucwords(strtolower($name));
         }
 
-        Shelf::create([
+        $shelf = Shelf::create([
             'name' => $name,
             'description' => $request->description,
             'parent_id' => $request->parent_id,
@@ -94,6 +95,13 @@ class ShelfController extends Controller
             'is_common' => $request->boolean('is_common', true),
             'user_id' => Auth::id(),
         ]);
+
+        if ($request->hasFile('cover_image')) {
+            $file = $request->file('cover_image');
+            $filename = time() . '_' . $file->getClientOriginalName();
+            $file->move(public_path('shelves'), $filename);
+            $shelf->update(['cover_image' => $filename]);
+        }
 
         return back()->with('success', 'Shelf created successfully.');
     }
@@ -106,6 +114,7 @@ class ShelfController extends Controller
             'parent_id' => 'nullable|exists:shelves,id',
             'is_hidden' => 'required|boolean',
             'is_common' => 'boolean',
+            'cover_image' => 'nullable|image|max:2048',
         ]);
 
         // Prevent self-parenting
@@ -126,6 +135,13 @@ class ShelfController extends Controller
             'is_hidden' => $request->is_hidden,
             'is_common' => $request->is_common,
         ]);
+
+        if ($request->hasFile('cover_image')) {
+            $file = $request->file('cover_image');
+            $filename = time() . '_' . $file->getClientOriginalName();
+            $file->move(public_path('shelves'), $filename);
+            $shelf->update(['cover_image' => $filename]);
+        }
 
         return back()->with('success', 'Shelf updated successfully.');
     }

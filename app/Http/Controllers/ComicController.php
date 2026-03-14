@@ -274,6 +274,7 @@ class ComicController extends Controller
             'shared_roles'  => $comic->sharedRoles->map(fn($r) => ['id' => $r->id, 'name' => $r->name]),
             'share_url'     => $comic->share_url,
             'rating'        => $comic->rating,
+            'thumbnail'     => $comic->thumbnail,
             'tags'          => $comic->tags,
         ]);
 
