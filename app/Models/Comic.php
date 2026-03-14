@@ -21,6 +21,7 @@ class Comic extends Model
         'rating',
         'tags',
         'md5_hash',
+        'visual_hash', // ADD this column via migration: string, nullable
     ];
 
     protected $appends = ['encrypted_id', 'share_url'];
@@ -83,35 +84,30 @@ class Comic extends Model
 
     public function scopeVisible($query, $user = null)
     {
-        // 1. If no user, only show public AND approved by admin
         if (!$user) {
             return $query->where('is_hidden', false)
                 ->where('is_personal', false)
                 ->where('is_approved', true);
         }
 
-        // 2. If admin, show all (including hidden and unapproved)
         if ($user->hasRole('admin')) {
             return $query;
         }
 
-        // 3. For regular users:
         return $query->where(function ($q) use ($user) {
             $q->where(function ($sq) {
-                // Public AND Approved
                 $sq->where('is_hidden', false)
                     ->where('is_personal', false)
                     ->where('is_approved', true);
             })
-                ->orWhere('user_id', $user->id) // Uploaded by them (even if not approved)
+                ->orWhere('user_id', $user->id)
                 ->orWhereHas('sharedWith', function ($sq) use ($user) {
-                    $sq->where('users.id', $user->id); // Explicitly shared with them
+                    $sq->where('users.id', $user->id);
                 })
                 ->orWhereHas('sharedRoles', function ($sq) use ($user) {
-                    $sq->whereIn('roles.id', $user->roles->pluck('id')); // Shared with one of their roles
+                    $sq->whereIn('roles.id', $user->roles->pluck('id'));
                 })
                 ->orWhereHas('categories', function ($sq) use ($user) {
-                    // Cascading Sharing via Category
                     $sq->whereHas('sharedUsers', function ($ssq) use ($user) {
                         $ssq->where('users.id', $user->id);
                     })
@@ -137,8 +133,8 @@ class Comic extends Model
     }
 
     /**
-     * Generate a fingerprint using the first 1MB of the file and the total file size.
-     * This helps detect duplicates that have identical content but different metadata/trailers.
+     * Original partial hash — kept for backward compatibility.
+     * NOTE: This breaks after compression. Use getVisualHash() for duplicate detection.
      */
     public static function getPartialHash($path)
     {
@@ -148,11 +144,61 @@ class Comic extends Model
         $handle = fopen($path, 'rb');
         if (!$handle) return null;
 
-        // Read first 1MB
         $data = fread($handle, 1024 * 1024);
         fclose($handle);
 
         return md5($data) . ':' . $size;
+    }
+
+    /**
+     * Returns a visual fingerprint that survives PDF compression.
+     * Renders the first page at 30 DPI and hashes the image,
+     * combined with page count for a stronger signal.
+     *
+     * Format: "<image_md5>:<page_count>"
+     */
+    public static function getVisualHash($path): ?string
+    {
+        if (!file_exists($path)) return null;
+
+        $pageCount = self::getPageCount($path);
+        if (!$pageCount) return null;
+
+        $tempPrefix = sys_get_temp_dir() . '/' . uniqid('vhash_');
+
+        // Render first page at 30 DPI — fast (~0.5s) and compression-resistant
+        exec(
+            "pdftoppm -f 1 -l 1 -r 30 -png " . escapeshellarg($path) . " " . escapeshellarg($tempPrefix) . " 2>/dev/null",
+            $out,
+            $code
+        );
+
+        $files = glob($tempPrefix . '-*.png');
+
+        if ($code !== 0 || empty($files)) {
+            foreach ($files as $f) @unlink($f);
+            return null;
+        }
+
+        $imageHash = md5_file($files[0]);
+        foreach ($files as $f) @unlink($f);
+
+        return $imageHash . ':' . $pageCount;
+    }
+
+    /**
+     * Get the number of pages in a PDF using pdfinfo.
+     */
+    public static function getPageCount($path): ?int
+    {
+        exec(
+            "pdfinfo " . escapeshellarg($path) . " 2>/dev/null | grep -i '^Pages:' | awk '{print $2}'",
+            $out,
+            $code
+        );
+
+        $count = isset($out[0]) ? (int) trim($out[0]) : null;
+        return $count > 0 ? $count : null;
     }
 
     public function generateThumbnail()
@@ -169,18 +215,17 @@ class Comic extends Model
             mkdir($thumbDir, 0755, true);
         }
 
-        // 1. Try Filename-based variants (highest priority)
-        $basename = pathinfo($absolutePdfPath, PATHINFO_BASENAME); // e.g., "ബാലഭൂമി.pdf"
-        $filename = pathinfo($absolutePdfPath, PATHINFO_FILENAME); // e.g., "ബാലഭൂമി"
+        $basename = pathinfo($absolutePdfPath, PATHINFO_BASENAME);
+        $filename = pathinfo($absolutePdfPath, PATHINFO_FILENAME);
 
         $patterns = [
-            $basename . ".png",   // "ബാലഭൂമി.pdf.png"
-            $basename . ".PNG",   // "ബാലഭൂമി.pdf.PNG"
-            $filename . ".png",   // "ബാലഭൂമി.png"
-            $filename . ".jpg",   // "ബാലഭൂമി.jpg"
-            $filename . ".jpeg",  // "ബാലഭൂമി.jpeg"
-            str_replace('.pdf', '.PDF.png', $basename), // "ബാലഭൂമി.PDF.png"
-            str_replace('.pdf', '.Pdf.png', $basename), // "ബാലഭൂമി.Pdf.png"
+            $basename . ".png",
+            $basename . ".PNG",
+            $filename . ".png",
+            $filename . ".jpg",
+            $filename . ".jpeg",
+            str_replace('.pdf', '.PDF.png', $basename),
+            str_replace('.pdf', '.Pdf.png', $basename),
         ];
 
         foreach ($patterns as $pattern) {
@@ -190,16 +235,13 @@ class Comic extends Model
             }
         }
 
-        // 2. Update MD5 hash for duplicate detection (don't use for naming)
         $contentMd5 = self::getPartialHash($absolutePdfPath);
         $this->update(['md5_hash' => $contentMd5]);
 
-        // 3. Generate if it doesn't exist
         $tempPrefix = $thumbDir . '/' . uniqid('thumb_');
         $pdfPathEscaped = escapeshellarg($absolutePdfPath);
         $tempPrefixEscaped = escapeshellarg($tempPrefix);
 
-        // pdftoppm -f 1 -l 1 -png "pdfPath" "tempPrefix"
         $command = "pdftoppm -f 1 -l 1 -png " . $pdfPathEscaped . " " . $tempPrefixEscaped . " 2>&1";
         exec($command, $output, $returnVar);
 
@@ -211,7 +253,6 @@ class Comic extends Model
             rename($generatedFile, $thumbDir . '/' . $finalFile);
             $this->update(['thumbnail' => $finalFile]);
 
-            // Clean up extras
             foreach (glob($tempPrefix . "-*.png") as $extra) {
                 @unlink($extra);
             }
