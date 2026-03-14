@@ -6,101 +6,130 @@ use App\Http\Controllers\Controller;
 use App\Models\Comic;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use App\Services\LoggingService;
+use Jenssegers\ImageHash\Hash;
 
 class DuplicateController extends Controller
 {
+    // Bits that can differ and still be considered the same visual content.
+    // 8 = tolerant enough for compression differences, strict enough to avoid false positives.
+    private const HASH_THRESHOLD = 8;
+
     public function index(Request $request)
     {
         $search = $request->input('q');
 
-        // 1. Base query for visual_hash groups with duplicates
-        $hashQuery = Comic::whereNotNull('visual_hash')
-            ->select('visual_hash')
-            ->groupBy('visual_hash')
-            ->havingRaw('COUNT(*) > 1');
+        // Fetch all comics that have a visual hash
+        $query = Comic::whereNotNull('visual_hash')->with(['shelf', 'categories']);
 
-        // 2. Filter to groups where at least one item matches the search
+        // Narrow the pool to comics matching the search before grouping
         if ($search) {
-            $hashQuery->whereIn('visual_hash', function ($query) use ($search) {
-                $query->select('visual_hash')
-                    ->from('comics')
-                    ->where('title', 'like', "%{$search}%")
-                    ->orWhere('path', 'like', "%{$search}%")
+            $query->where(function ($q) use ($search) {
+                $q->where('title',    'like', "%{$search}%")
+                    ->orWhere('path',     'like', "%{$search}%")
                     ->orWhere('filename', 'like', "%{$search}%");
             });
         }
 
-        // 3. Paginate the hashes (10 per page)
-        $paginatedHashes = $hashQuery->paginate(10)->withQueryString();
+        $allComics = $query->get();
 
-        // 4. Get all comics for these specific hashes
-        $hashesOnPage = $paginatedHashes->pluck('visual_hash');
+        // Group by perceptual similarity (hamming distance)
+        $groups   = [];
+        $assigned = [];
 
-        $comics = Comic::whereIn('visual_hash', $hashesOnPage)
-            ->with(['shelf', 'categories'])
-            ->orderBy('visual_hash')
-            ->get()
-            ->groupBy('visual_hash');
+        foreach ($allComics as $comic) {
+            if (isset($assigned[$comic->id])) continue;
 
-        // 5. Transform into grouped structure, auto-suggest which to keep (smallest file = compressed)
-        $duplicates = $paginatedHashes->getCollection()->map(function ($h) use ($comics) {
-            $hash = $h->visual_hash;
-            $group = $comics->get($hash);
+            [$hex, $pages] = array_pad(explode(':', $comic->visual_hash, 2), 2, null);
+            if (!$hex || !$pages) continue;
 
-            if (!$group) return null;
+            $group = collect([$comic]);
+            $assigned[$comic->id] = true;
 
+            foreach ($allComics as $other) {
+                if (isset($assigned[$other->id])) continue;
+
+                [$otherHex, $otherPages] = array_pad(explode(':', $other->visual_hash, 2), 2, null);
+
+                if ($otherPages !== $pages) continue;
+
+                try {
+                    $distance = Hash::fromHex($hex)->distance(Hash::fromHex($otherHex));
+                    if ($distance <= self::HASH_THRESHOLD) {
+                        $group->push($other);
+                        $assigned[$other->id] = true;
+                    }
+                } catch (\Exception $e) {
+                    continue;
+                }
+            }
+
+            if ($group->count() > 1) {
+                $groups[] = $group;
+            }
+        }
+
+        // Paginate the groups manually
+        $perPage     = 10;
+        $currentPage = (int) $request->input('page', 1);
+        $total       = count($groups);
+        $slice       = array_slice($groups, ($currentPage - 1) * $perPage, $perPage);
+
+        $duplicates = collect($slice)->map(function ($group) {
             // Suggest keeping the smallest file (compressed version)
             $suggestedKeepId = $group->sortBy(fn($c) => $this->getFileSizeBytes($c->path))->first()->id;
 
             return [
-                'hash' => $hash,
-                'count' => $group->count(),
+                'hash'              => $group->first()->visual_hash,
+                'count'             => $group->count(),
                 'suggested_keep_id' => $suggestedKeepId,
-                'items' => $group->map(fn($comic) => [
-                    'id' => $comic->id,
-                    'title' => $comic->title,
-                    'path' => $comic->path,
-                    'filename' => $comic->filename,
-                    'thumbnail' => $comic->thumbnail,
+                'items'             => $group->map(fn($comic) => [
+                    'id'          => $comic->id,
+                    'title'       => $comic->title,
+                    'path'        => $comic->path,
+                    'filename'    => $comic->filename,
+                    'thumbnail'   => $comic->thumbnail,
                     'is_approved' => $comic->is_approved,
-                    'shelf' => $comic->shelf ? $comic->shelf->name : 'No Shelf',
-                    'size' => $this->getFileSize($comic->path),
-                    'size_bytes' => $this->getFileSizeBytes($comic->path),
-                ])
+                    'shelf'       => $comic->shelf?->name ?? 'No Shelf',
+                    'size'        => $this->getFileSize($comic->path),
+                    'size_bytes'  => $this->getFileSizeBytes($comic->path),
+                ])->values(),
             ];
-        })->filter()->values();
+        })->values();
+
+        // Build pagination links manually
+        $lastPage = max(1, (int) ceil($total / $perPage));
+        $links    = $this->buildPaginationLinks($currentPage, $lastPage, $request);
 
         return Inertia::render('Admin/Comics/Duplicates', [
             'paginatedData' => [
-                'data' => $duplicates,
-                'links' => $paginatedHashes->linkCollection()->toArray(),
-                'meta' => [
-                    'current_page' => $paginatedHashes->currentPage(),
-                    'from' => $paginatedHashes->firstItem(),
-                    'last_page' => $paginatedHashes->lastPage(),
-                    'path' => $paginatedHashes->path(),
-                    'per_page' => $paginatedHashes->perPage(),
-                    'to' => $paginatedHashes->lastItem(),
-                    'total' => $paginatedHashes->total(),
-                ]
+                'data'  => $duplicates,
+                'links' => $links,
+                'meta'  => [
+                    'current_page' => $currentPage,
+                    'from'         => $total > 0 ? ($currentPage - 1) * $perPage + 1 : null,
+                    'last_page'    => $lastPage,
+                    'path'         => $request->url(),
+                    'per_page'     => $perPage,
+                    'to'           => min($currentPage * $perPage, $total) ?: null,
+                    'total'        => $total,
+                ],
             ],
-            'filters' => $request->only(['q'])
+            'filters' => $request->only(['q']),
         ]);
     }
 
     public function destroy(Comic $comic)
     {
-        $baseDir = config('comics.base_dir');
+        $baseDir  = config('comics.base_dir');
         $fullPath = $baseDir . '/' . ltrim($comic->path, '/');
 
         LoggingService::info("Attempting to delete duplicate file", [
-            'id' => $comic->id,
-            'path' => $comic->path,
+            'id'       => $comic->id,
+            'path'     => $comic->path,
             'fullPath' => $fullPath,
-            'exists' => File::exists($fullPath)
+            'exists'   => File::exists($fullPath),
         ]);
 
         $success = false;
@@ -108,17 +137,17 @@ class DuplicateController extends Controller
         if (File::exists($fullPath)) {
             $success = @unlink($fullPath);
             if (!$success) {
-                $error = error_get_last();
+                $error       = error_get_last();
                 $permissions = substr(sprintf('%o', fileperms($fullPath)), -4);
-                $owner = function_exists('posix_getpwuid') ? posix_getpwuid(fileowner($fullPath))['name'] : fileowner($fullPath);
+                $owner       = function_exists('posix_getpwuid') ? posix_getpwuid(fileowner($fullPath))['name'] : fileowner($fullPath);
 
                 LoggingService::error("Failed to delete physical file", [
-                    'path' => $fullPath,
-                    'error' => $error ? $error['message'] : 'Unknown error',
-                    'permissions' => $permissions,
-                    'owner' => $owner,
-                    'is_writable' => is_writable($fullPath),
-                    'dir_writable' => is_writable(dirname($fullPath))
+                    'path'         => $fullPath,
+                    'error'        => $error['message'] ?? 'Unknown error',
+                    'permissions'  => $permissions,
+                    'owner'        => $owner,
+                    'is_writable'  => is_writable($fullPath),
+                    'dir_writable' => is_writable(dirname($fullPath)),
                 ]);
             } else {
                 LoggingService::info("Physical file deleted successfully", ['path' => $fullPath]);
@@ -144,27 +173,27 @@ class DuplicateController extends Controller
             return back()->with('error', 'No files selected for deletion.');
         }
 
-        $comics = Comic::whereIn('id', $ids)->get();
+        $comics  = Comic::whereIn('id', $ids)->get();
         $baseDir = config('comics.base_dir');
-        $count = 0;
-        $failed = 0;
+        $count   = 0;
+        $failed  = 0;
 
         foreach ($comics as $comic) {
             $fullPath = $baseDir . '/' . ltrim($comic->path, '/');
-            $success = false;
+            $success  = false;
 
             if (File::exists($fullPath)) {
                 $success = @unlink($fullPath);
                 if (!$success) {
-                    $error = error_get_last();
+                    $error       = error_get_last();
                     $permissions = substr(sprintf('%o', fileperms($fullPath)), -4);
-                    $owner = function_exists('posix_getpwuid') ? posix_getpwuid(fileowner($fullPath))['name'] : fileowner($fullPath);
+                    $owner       = function_exists('posix_getpwuid') ? posix_getpwuid(fileowner($fullPath))['name'] : fileowner($fullPath);
 
                     LoggingService::error("Failed to bulk delete physical file", [
-                        'path' => $fullPath,
-                        'error' => $error ? $error['message'] : 'Unknown error',
+                        'path'        => $fullPath,
+                        'error'       => $error['message'] ?? 'Unknown error',
                         'permissions' => $permissions,
-                        'owner' => $owner
+                        'owner'       => $owner,
                     ]);
                     $failed++;
                 }
@@ -185,10 +214,37 @@ class DuplicateController extends Controller
         return back()->with('success', "$count duplicate files deleted successfully.");
     }
 
+    private function buildPaginationLinks(int $currentPage, int $lastPage, Request $request): array
+    {
+        $links = [];
+
+        $links[] = [
+            'url'    => $currentPage > 1 ? $request->fullUrlWithQuery(['page' => $currentPage - 1]) : null,
+            'label'  => '&laquo; Previous',
+            'active' => false,
+        ];
+
+        for ($i = 1; $i <= $lastPage; $i++) {
+            $links[] = [
+                'url'    => $request->fullUrlWithQuery(['page' => $i]),
+                'label'  => (string) $i,
+                'active' => $i === $currentPage,
+            ];
+        }
+
+        $links[] = [
+            'url'    => $currentPage < $lastPage ? $request->fullUrlWithQuery(['page' => $currentPage + 1]) : null,
+            'label'  => 'Next &raquo;',
+            'active' => false,
+        ];
+
+        return $links;
+    }
+
     private function getFileSizeBytes($path): int
     {
         $fullPath = config('comics.base_dir') . '/' . ltrim($path, '/');
-        return file_exists($fullPath) ? filesize($fullPath) : 0;
+        return file_exists($fullPath) ? (int) filesize($fullPath) : 0;
     }
 
     private function getFileSize($path): string

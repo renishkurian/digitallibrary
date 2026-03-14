@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Services\LoggingService;
+use Jenssegers\ImageHash\Hash;
 
 class SyncComics extends Command
 {
@@ -25,15 +26,15 @@ class SyncComics extends Command
         // Pre-fetch all existing comics keyed by path
         $existingComics = \App\Models\Comic::all(['id', 'path', 'title', 'filename', 'thumbnail', 'md5_hash', 'visual_hash'])->keyBy('path');
 
-        // Build a visual_hash => Comic map to detect duplicates across files
+        // Build visual_hash => Comic map for similarity lookups
         $visualHashMap = $existingComics
             ->filter(fn($c) => !empty($c->visual_hash))
             ->keyBy('visual_hash');
 
         $files = \Illuminate\Support\Facades\File::allFiles($baseDir);
-        $count = 0;
+        $count   = 0;
         $updated = 0;
-        $new = 0;
+        $new     = 0;
         $skipped = 0;
         $processedPaths = [];
 
@@ -42,38 +43,39 @@ class SyncComics extends Command
 
             $absolutePath = $file->getRealPath();
             $relativePath = str_replace($baseDir . '/', '', $absolutePath);
-            $filename = $file->getFilename();
-            $title = $this->cleanTitle($file->getFilenameWithoutExtension());
+            $filename     = $file->getFilename();
+            $title        = $this->cleanTitle($file->getFilenameWithoutExtension());
 
-            // Check if this path already exists in DB
             $comic = $existingComics->get($relativePath);
 
             if (!$comic) {
-                // New file — compute visual hash to check for duplicates
+                // New file — compute perceptual hash and check for visual duplicates
                 $visualHash = \App\Models\Comic::getVisualHash($absolutePath);
 
-                if ($visualHash && $visualHashMap->has($visualHash)) {
-                    // Duplicate detected — same visual content as an existing comic
-                    $original = $visualHashMap->get($visualHash);
-                    $this->warn("Duplicate skipped: {$filename} matches existing [{$original->filename}]");
-                    $skipped++;
-                    $processedPaths[$relativePath] = true; // don't treat as orphan
-                    continue;
+                if ($visualHash) {
+                    $duplicate = $this->findSimilarHash($visualHash, $visualHashMap);
+
+                    if ($duplicate) {
+                        $this->warn("Duplicate skipped: {$filename} matches existing [{$duplicate->filename}]");
+                        $skipped++;
+                        $processedPaths[$relativePath] = true; // prevent orphan deletion
+                        continue;
+                    }
                 }
 
                 // Genuinely new comic
                 $comic = new \App\Models\Comic(['path' => $relativePath]);
                 $comic->visual_hash = $visualHash;
-                $comic->md5_hash = \App\Models\Comic::getPartialHash($absolutePath);
+                $comic->md5_hash    = \App\Models\Comic::getPartialHash($absolutePath);
 
-                // Register in map so later files in same sync don't duplicate it
+                // Register so duplicates later in this same scan are also caught
                 if ($visualHash) {
                     $visualHashMap->put($visualHash, $comic);
                 }
 
                 $isNew = true;
             } else {
-                // Existing comic — compute visual hash only if missing
+                // Existing comic — backfill visual_hash lazily if missing
                 if (empty($comic->visual_hash)) {
                     $comic->visual_hash = \App\Models\Comic::getVisualHash($absolutePath);
                     if ($comic->visual_hash) {
@@ -84,7 +86,7 @@ class SyncComics extends Command
             }
 
             $comic->fill([
-                'title' => $title,
+                'title'    => $title,
                 'filename' => $filename,
             ]);
 
@@ -98,7 +100,7 @@ class SyncComics extends Command
                 $comic->thumbnail = $this->getThumbnail($absolutePath, $thumbDir, $baseDir);
             }
 
-            // Only save if dirty
+            // Only write to DB if something actually changed
             if ($comic->isDirty()) {
                 $comic->save();
                 if ($isNew) {
@@ -122,7 +124,7 @@ class SyncComics extends Command
             $count++;
         }
 
-        // Cleanup: Remove DB records whose files are gone
+        // Remove DB records whose files no longer exist on disk
         $orphans = $existingComics->diffKeys($processedPaths);
         $deleted = $orphans->count();
 
@@ -133,13 +135,41 @@ class SyncComics extends Command
         $this->info("Scan completed. Total: $count, New: $new, Updated: $updated, Duplicates skipped: $skipped, Removed: $deleted.");
 
         LoggingService::info("Comic library sync completed", [
-            'total' => $count,
-            'new' => $new,
-            'updated' => $updated,
+            'total'              => $count,
+            'new'                => $new,
+            'updated'            => $updated,
             'skipped_duplicates' => $skipped,
-            'removed' => $deleted,
-            'base_dir' => $baseDir
+            'removed'            => $deleted,
+            'base_dir'           => $baseDir,
         ]);
+    }
+
+    /**
+     * Find a comic whose perceptual hash is visually similar to $newHash.
+     * Uses hamming distance — threshold of 8 means up to 8 bits can differ out of 64.
+     * Page count must also match to avoid false positives.
+     */
+    private function findSimilarHash(string $newHash, \Illuminate\Support\Collection $hashMap, int $threshold = 8): ?\App\Models\Comic
+    {
+        [$newHex, $newPages] = array_pad(explode(':', $newHash, 2), 2, null);
+        if (!$newHex || !$newPages) return null;
+
+        foreach ($hashMap as $existingHash => $comic) {
+            [$existingHex, $existingPages] = array_pad(explode(':', $existingHash, 2), 2, null);
+
+            if ($existingPages !== $newPages) continue;
+
+            try {
+                $distance = Hash::fromHex($newHex)->distance(Hash::fromHex($existingHex));
+                if ($distance <= $threshold) {
+                    return $comic;
+                }
+            } catch (\Exception $e) {
+                continue;
+            }
+        }
+
+        return null;
     }
 
     protected function cleanTitle($name)

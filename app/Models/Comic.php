@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Jenssegers\ImageHash\ImageHash;
+use Jenssegers\ImageHash\Implementations\DifferenceHash;
 
 class Comic extends Model
 {
@@ -157,6 +159,8 @@ class Comic extends Model
      *
      * Format: "<image_md5>:<page_count>"
      */
+
+
     public static function getVisualHash($path): ?string
     {
         if (!file_exists($path)) return null;
@@ -166,9 +170,9 @@ class Comic extends Model
 
         $tempPrefix = sys_get_temp_dir() . '/' . uniqid('vhash_');
 
-        // Render first page at 30 DPI — fast (~0.5s) and compression-resistant
+        // Render at higher resolution for better perceptual accuracy
         exec(
-            "pdftoppm -f 1 -l 1 -r 30 -png " . escapeshellarg($path) . " " . escapeshellarg($tempPrefix) . " 2>/dev/null",
+            "pdftoppm -f 1 -l 1 -r 72 -png " . escapeshellarg($path) . " " . escapeshellarg($tempPrefix) . " 2>/dev/null",
             $out,
             $code
         );
@@ -180,10 +184,18 @@ class Comic extends Model
             return null;
         }
 
-        $imageHash = md5_file($files[0]);
+        try {
+            $hasher = new ImageHash(new DifferenceHash());
+            $hash = $hasher->hash($files[0]);
+            $hexHash = $hash->toHex();
+        } catch (\Exception $e) {
+            foreach ($files as $f) @unlink($f);
+            return null;
+        }
+
         foreach ($files as $f) @unlink($f);
 
-        return $imageHash . ':' . $pageCount;
+        return $hexHash . ':' . $pageCount;
     }
 
     /**
