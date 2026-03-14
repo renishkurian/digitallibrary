@@ -16,17 +16,16 @@ class DuplicateController extends Controller
     {
         $search = $request->input('q');
 
-        // 1. Base query for hashes with duplicates
-        $hashQuery = Comic::whereNotNull('md5_hash')
-            ->select('md5_hash')
-            ->groupBy('md5_hash')
+        // 1. Base query for visual_hash groups with duplicates
+        $hashQuery = Comic::whereNotNull('visual_hash')
+            ->select('visual_hash')
+            ->groupBy('visual_hash')
             ->havingRaw('COUNT(*) > 1');
 
-        // 2. Filter hashes by search if provided
-        // We only want to show duplicate groups where at least ONE item matches the search
+        // 2. Filter to groups where at least one item matches the search
         if ($search) {
-            $hashQuery->whereIn('md5_hash', function ($query) use ($search) {
-                $query->select('md5_hash')
+            $hashQuery->whereIn('visual_hash', function ($query) use ($search) {
+                $query->select('visual_hash')
                     ->from('comics')
                     ->where('title', 'like', "%{$search}%")
                     ->orWhere('path', 'like', "%{$search}%")
@@ -38,25 +37,28 @@ class DuplicateController extends Controller
         $paginatedHashes = $hashQuery->paginate(10)->withQueryString();
 
         // 4. Get all comics for these specific hashes
-        $hashesOnPage = $paginatedHashes->pluck('md5_hash');
+        $hashesOnPage = $paginatedHashes->pluck('visual_hash');
 
-        $comics = Comic::whereIn('md5_hash', $hashesOnPage)
+        $comics = Comic::whereIn('visual_hash', $hashesOnPage)
             ->with(['shelf', 'categories'])
-            ->orderBy('md5_hash')
+            ->orderBy('visual_hash')
             ->get()
-            ->groupBy('md5_hash');
+            ->groupBy('visual_hash');
 
-        // 5. Transform into the grouped structure
+        // 5. Transform into grouped structure, auto-suggest which to keep (smallest file = compressed)
         $duplicates = $paginatedHashes->getCollection()->map(function ($h) use ($comics) {
-            $hash = $h->md5_hash;
+            $hash = $h->visual_hash;
             $group = $comics->get($hash);
 
             if (!$group) return null;
 
+            // Suggest keeping the smallest file (compressed version)
+            $suggestedKeepId = $group->sortBy(fn($c) => $this->getFileSizeBytes($c->path))->first()->id;
+
             return [
                 'hash' => $hash,
                 'count' => $group->count(),
-                'size' => $this->getFileSize($group->first()->path),
+                'suggested_keep_id' => $suggestedKeepId,
                 'items' => $group->map(fn($comic) => [
                     'id' => $comic->id,
                     'title' => $comic->title,
@@ -65,7 +67,8 @@ class DuplicateController extends Controller
                     'thumbnail' => $comic->thumbnail,
                     'is_approved' => $comic->is_approved,
                     'shelf' => $comic->shelf ? $comic->shelf->name : 'No Shelf',
-                    'size' => $this->getFileSize($comic->path)
+                    'size' => $this->getFileSize($comic->path),
+                    'size_bytes' => $this->getFileSizeBytes($comic->path),
                 ])
             ];
         })->filter()->values();
@@ -100,12 +103,9 @@ class DuplicateController extends Controller
             'exists' => File::exists($fullPath)
         ]);
 
-        // 1. Delete physical file first
-        $fullPath = config('comics.base_dir') . '/' . ltrim($comic->path, '/');
         $success = false;
 
         if (File::exists($fullPath)) {
-            // Attempt to delete and capture error if it fails
             $success = @unlink($fullPath);
             if (!$success) {
                 $error = error_get_last();
@@ -125,10 +125,9 @@ class DuplicateController extends Controller
             }
         } else {
             LoggingService::warning("Physical file does not exist during deletion attempt", ['path' => $fullPath]);
-            $success = true; // Treat as success for DB cleanup purposes if file is already gone
+            $success = true;
         }
 
-        // 2. Only delete DB record if file deletion succeeded
         if ($success) {
             $comic->delete();
             return back()->with('success', 'Duplicate file deleted successfully.');
@@ -154,7 +153,6 @@ class DuplicateController extends Controller
             $fullPath = $baseDir . '/' . ltrim($comic->path, '/');
             $success = false;
 
-            // Delete physical file
             if (File::exists($fullPath)) {
                 $success = @unlink($fullPath);
                 if (!$success) {
@@ -171,10 +169,9 @@ class DuplicateController extends Controller
                     $failed++;
                 }
             } else {
-                $success = true; // File already gone
+                $success = true;
             }
 
-            // Only delete database record if physical file is gone
             if ($success) {
                 $comic->delete();
                 $count++;
@@ -188,22 +185,23 @@ class DuplicateController extends Controller
         return back()->with('success', "$count duplicate files deleted successfully.");
     }
 
-    private function getFileSize($path)
+    private function getFileSizeBytes($path): int
     {
-        $baseDir = config('comics.base_dir');
-        $fullPath = $baseDir . '/' . ltrim($path, '/');
+        $fullPath = config('comics.base_dir') . '/' . ltrim($path, '/');
+        return file_exists($fullPath) ? filesize($fullPath) : 0;
+    }
 
-        if (File_exists($fullPath)) {
-            $bytes = filesize($fullPath);
-            $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    private function getFileSize($path): string
+    {
+        $bytes = $this->getFileSizeBytes($path);
 
-            for ($i = 0; $bytes > 1024 && $i < count($units) - 1; $i++) {
-                $bytes /= 1024;
-            }
+        if ($bytes === 0) return 'Unknown';
 
-            return round($bytes, 2) . ' ' . $units[$i];
+        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        for ($i = 0; $bytes > 1024 && $i < count($units) - 1; $i++) {
+            $bytes /= 1024;
         }
 
-        return 'Unknown';
+        return round($bytes, 2) . ' ' . $units[$i];
     }
 }
