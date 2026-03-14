@@ -52,6 +52,30 @@ class Shelf extends Model
         return $ids;
     }
 
+    protected $appends = ['aggregate_comics_count', 'hash_id'];
+
+    public function getAggregateComicsCountAttribute()
+    {
+        $count = $this->comics()->count();
+        foreach ($this->children as $child) {
+            $count += $child->aggregate_comics_count;
+        }
+        return $count;
+    }
+
+    public function getHashIdAttribute()
+    {
+        // Simple obfuscation for URLs
+        return base64_encode($this->id . 'balarama');
+    }
+
+    public static function findByHashId($hash)
+    {
+        $decoded = base64_decode($hash);
+        $id = str_replace('balarama', '', $decoded);
+        return self::find($id);
+    }
+
     public function scopeVisible($query, $user = null)
     {
         $user = $user ?? auth()->user();

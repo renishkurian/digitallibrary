@@ -101,7 +101,7 @@ export default function Index({ shelves }) {
                             >
                                 <option value="">None (Top Level)</option>
                                 {shelves.filter(s => !editingShelf || s.id !== editingShelf.id).map(s => (
-                                    <option key={s.id} value={s.id}>{s.name}</option>
+                                    <option key={s.id} value={s.id}>{s.display_name || s.name}</option>
                                 ))}
                             </select>
                             {errors.parent_id && <span className="text-[#e8003d] text-xs">{errors.parent_id}</span>}
@@ -201,12 +201,7 @@ export default function Index({ shelves }) {
                                         </td>
                                         <td className="py-4 font-bold text-white group-hover:text-[#e8003d] transition-colors">
                                             <div className="flex flex-col">
-                                                <span>{shelf.name}</span>
-                                                {shelf.parent && (
-                                                    <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest mt-1">
-                                                        ↳ Under {shelf.parent.name}
-                                                    </span>
-                                                )}
+                                                <span>{shelf.display_name || shelf.name}</span>
                                                 <span className="text-[10px] text-[#55556a] font-normal normal-case mt-0.5 line-clamp-1">{shelf.description || 'No description'}</span>
                                             </div>
                                         </td>
@@ -282,7 +277,7 @@ export default function Index({ shelves }) {
                                 >
                                     <option value="">None (Top Level)</option>
                                     {shelves.filter(s => s.id !== editingShelf?.id).map(s => (
-                                        <option key={s.id} value={s.id}>{s.name}</option>
+                                        <option key={s.id} value={s.id}>{s.display_name || s.name}</option>
                                     ))}
                                 </select>
                                 {errors.parent_id && <span className="text-[#e8003d] text-xs">{errors.parent_id}</span>}

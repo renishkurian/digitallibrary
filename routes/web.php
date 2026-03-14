@@ -43,6 +43,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/comics/{comic}/regenerate-thumbnail', [ComicController::class, 'regenerateThumbnail'])->name('comics.regenerate-thumbnail');
         Route::post('/comics/{comic}/approve', [ComicController::class, 'approve'])->name('comics.approve');
         Route::post('/comics/bulk-approve', [ComicController::class, 'bulkApprove'])->name('comics.bulk-approve');
+        Route::post('/comics/bulk-shelves', [ComicController::class, 'bulkShelves'])->name('comics.bulk-shelves');
         Route::post('/comics/approve-all-pending', [ComicController::class, 'approveAllPending'])->name('comics.approve-all-pending');
         Route::get('/comics/sync-status', [ComicController::class, 'getSyncStatus'])->name('comics.sync-status');
         Route::post('/comics/auto-tag-all-pending', [ComicController::class, 'autoTagAllPending'])->name('comics.auto-tag-all-pending');

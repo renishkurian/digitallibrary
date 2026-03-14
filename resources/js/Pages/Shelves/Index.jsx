@@ -46,6 +46,19 @@ export default function Index({ shelves }) {
                                     <p className="text-[#8888a0] text-[13px] line-clamp-2 mt-2 leading-relaxed h-10">
                                         {shelf.description || 'No description available for this shelf.'}
                                     </p>
+
+                                    {shelf.children?.length > 0 && (
+                                        <div className="mt-4 flex flex-wrap gap-2">
+                                            {shelf.children.slice(0, 3).map(child => (
+                                                <span key={child.id} className="text-[10px] bg-white/5 border border-white/10 text-[#8888a0] px-2 py-0.5 rounded-md">
+                                                    {child.name}
+                                                </span>
+                                            ))}
+                                            {shelf.children.length > 3 && (
+                                                <span className="text-[10px] text-[#55556a] font-bold">+{shelf.children.length - 3} more</span>
+                                            )}
+                                        </div>
+                                    )}
                                     
                                     <div className="mt-4 flex items-center justify-between text-[11px] tracking-widest uppercase font-semibold text-[#55556a]">
                                         <span>Collection</span>

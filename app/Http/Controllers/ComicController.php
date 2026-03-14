@@ -63,8 +63,15 @@ class ComicController extends Controller
         }
 
         // Shelf Filter
-        if ($request->filled('shelf')) {
-            $query->where('shelf_id', $request->shelf);
+        if ($request->has('shelf')) {
+            $shelfId = $request->shelf;
+            if (!is_numeric($shelfId)) {
+                $shelf = Shelf::findByHashId($shelfId);
+                $shelfId = $shelf ? $shelf->id : 0;
+            }
+            $query->whereHas('shelves', function ($q) use ($shelfId) {
+                $q->where('shelves.id', $shelfId);
+            });
         }
 
         // Category Filter
@@ -100,7 +107,7 @@ class ComicController extends Controller
             ->through(function ($comic) {
                 /** @var \App\Models\Comic $comic */
                 return [
-                    'id' => $comic->id,
+                    'id' => $comic->hash_id,
                     'title' => $comic->title,
                     'thumbnail' => $comic->thumbnail,
                     'is_read' => Auth::check() ? $comic->isReadBy(Auth::user()) : false,
@@ -134,13 +141,30 @@ class ComicController extends Controller
             'comics' => $comics,
             'recentlyRead' => $recentlyRead,
             'filters' => $request->only(['q', 'status', 'shelf', 'category', 'personal', 'shared', 'hidden']),
-            'shelves' => Shelf::visible(Auth::user())->orderBy('sort_order')->get(),
+            'shelves' => Shelf::visible(Auth::user())->whereNull('parent_id')->with(['children' => fn($q) => $q->visible(Auth::user())])->orderBy('sort_order')->get()->map(fn($s) => [
+                'id' => $s->hash_id,
+                'name' => $s->name,
+                'cover_image' => $s->cover_image,
+                'comics_count' => $s->aggregate_comics_count,
+                'children' => $s->children->map(fn($c) => [
+                    'id' => $c->hash_id,
+                    'name' => $c->name,
+                    'comics_count' => $c->aggregate_comics_count,
+                ])
+            ]),
             'categories' => Category::visible(Auth::user())->whereNull('parent_id')->with('children')->orderBy('sort_order')->get(),
         ]);
     }
 
-    public function show(Comic $comic)
+    public function show($id)
     {
+        $comic = Comic::findByHashId($id);
+        if (!$comic) {
+            $comic = Comic::find($id);
+        }
+
+        if (!$comic) abort(404);
+
         if ($comic->is_hidden && (!Auth::check() || !Auth::user()->is_admin)) {
             abort(403);
         }
@@ -161,8 +185,15 @@ class ComicController extends Controller
         ]);
     }
 
-    public function serve(Comic $comic)
+    public function serve($id)
     {
+        $comic = Comic::findByHashId($id);
+        if (!$comic) {
+            $comic = Comic::find($id);
+        }
+
+        if (!$comic) abort(404);
+
         /** @var \App\Models\User|null $user */
         $user = Auth::user();
 
@@ -280,7 +311,7 @@ class ComicController extends Controller
 
         return Inertia::render('Admin/Comics/Index', [
             'comics'     => $comics,
-            'shelves'    => Shelf::orderBy('sort_order')->get(),
+            'shelves'    => Shelf::whereNull('parent_id')->with(['children' => fn($q) => $q->withCount('comics')])->withCount('comics')->orderBy('sort_order')->get(),
             'categories' => Category::orderBy('sort_order')->get(),
             'users'      => User::orderBy('name')->get(['id', 'name', 'email']),
             'roles'      => \Spatie\Permission\Models\Role::orderBy('name')->get(['id', 'name']),
@@ -584,5 +615,28 @@ class ComicController extends Controller
         } catch (\Exception $e) {
             abort(404);
         }
+    }
+
+    public function bulkShelves(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:comics,id',
+            'shelf_id' => 'required|exists:shelves,id',
+            'action' => 'required|in:add,set'
+        ]);
+
+        $comics = Comic::whereIn('id', $request->ids)->get();
+        $shelfId = $request->shelf_id;
+
+        foreach ($comics as $comic) {
+            if ($request->action === 'set') {
+                $comic->shelves()->sync([$shelfId]);
+            } else {
+                $comic->shelves()->syncWithoutDetaching([$shelfId]);
+            }
+        }
+
+        return back()->with('success', count($request->ids) . ' comics updated.');
     }
 }

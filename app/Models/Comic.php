@@ -38,6 +38,22 @@ class Comic extends Model
         'rating' => 'float',
     ];
 
+    public function getHashIdAttribute()
+    {
+        return base64_encode($this->id . 'comic_vault');
+    }
+
+    public static function findByHashId($hash)
+    {
+        try {
+            $decoded = base64_decode($hash);
+            $id = str_replace('comic_vault', '', $decoded);
+            return self::find($id);
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
     public function getEncryptedIdAttribute()
     {
         return encrypt($this->id);

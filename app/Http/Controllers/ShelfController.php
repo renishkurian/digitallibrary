@@ -13,16 +13,36 @@ class ShelfController extends Controller
     {
         $shelves = Shelf::visible(Auth::user())
             ->whereNull('parent_id')
+            ->withCount('comics')
+            ->with(['children' => fn($q) => $q->visible(Auth::user())->withCount('comics')])
             ->orderBy('sort_order')
             ->get();
 
         return Inertia::render('Shelves/Index', [
-            'shelves' => $shelves,
+            'shelves' => $shelves->map(fn($s) => [
+                'id' => $s->hash_id,
+                'name' => $s->name,
+                'description' => $s->description,
+                'cover_image' => $s->cover_image,
+                'comics_count' => $s->aggregate_comics_count,
+                'children' => $s->children->map(fn($c) => [
+                    'id' => $c->hash_id,
+                    'name' => $c->name,
+                    'comics_count' => $c->aggregate_comics_count,
+                ])
+            ]),
         ]);
     }
 
-    public function show(Shelf $shelf, Request $request)
+    public function show($id, Request $request)
     {
+        $shelf = Shelf::findByHashId($id);
+        if (!$shelf) {
+            // Fallback for numeric ID if needed for backward compatibility during transition
+            $shelf = Shelf::find($id);
+        }
+
+        if (!$shelf) abort(404);
         if ($shelf->is_hidden && (!Auth::check() || !Auth::user()->is_admin)) {
             abort(403);
         }
@@ -63,7 +83,24 @@ class ShelfController extends Controller
 
     public function adminIndex()
     {
-        $shelves = Shelf::with(['user', 'parent'])->orderBy('sort_order')->get();
+        $allShelves = Shelf::with(['user', 'parent'])->orderBy('sort_order')->get();
+
+        // Build a hierarchical list
+        $shelves = [];
+        $roots = $allShelves->whereNull('parent_id');
+
+        $flatten = function ($items, $prefix = '') use (&$flatten, &$shelves, $allShelves) {
+            foreach ($items as $item) {
+                $item->display_name = $prefix . $item->name;
+                $shelves[] = $item;
+                $children = $allShelves->where('parent_id', $item->id);
+                if ($children->count() > 0) {
+                    $flatten($children, $prefix . '— ');
+                }
+            }
+        };
+
+        $flatten($roots);
 
         return Inertia::render('Admin/Shelves/Index', [
             'shelves' => $shelves,

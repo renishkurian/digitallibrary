@@ -9,6 +9,7 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
     const [sharingComic, setSharingComic] = useState(null);
     const [shareUserId, setShareUserId]   = useState('');
     const [selectedIds, setSelectedIds]   = useState([]);
+    const [bulkShelfId, setBulkShelfId]   = useState('');
     const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, confirmText: 'Confirm', confirmStyle: 'danger' });
     const [syncStatus, setSyncStatus] = useState({ status: 'idle', progress: '', error: null, last_sync_at: null });
 
@@ -169,13 +170,37 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
 
     const bulkGenerateAiMeta = () => {
         requestConfirm({
-            title: 'Auto-Tag Comics',
+            title: 'Bulk AI Auto-Tagging',
             message: `Are you sure you want to queue ${selectedIds.length} comics for AI auto-tagging?`,
-            confirmText: 'Queue Auto-Tag',
-            confirmStyle: 'primary',
             onConfirm: () => {
                 router.post(route('admin.comics.bulk-generate-ai'), { ids: selectedIds }, {
-                    preserveScroll: true,
+                    onSuccess: () => {
+                        setSelectedIds([]);
+                        closeConfirm();
+                    }
+                });
+            }
+        });
+    };
+
+    const handleBulkShelf = (action) => {
+        if (!bulkShelfId) return;
+        
+        const shelfName = shelves.find(s => s.id == bulkShelfId)?.name;
+        requestConfirm({
+            title: `Bulk ${action === 'set' ? 'Move' : 'Add'} to Shelf`,
+            message: `Are you sure you want to ${action === 'set' ? 'move' : 'add'} ${selectedIds.length} comics to "${shelfName}"?`,
+            onConfirm: () => {
+                router.post(route('admin.comics.bulk-shelves'), { 
+                    ids: selectedIds, 
+                    shelf_id: bulkShelfId,
+                    action: action
+                }, {
+                    onSuccess: () => {
+                        setSelectedIds([]);
+                        setBulkShelfId('');
+                        closeConfirm();
+                    }
                 });
             }
         });
@@ -396,13 +421,43 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                             >
                                 Bulk Approve
                             </button>
-                            <button 
+                             <button 
                                 onClick={bulkGenerateAiMeta}
                                 className="bg-purple-600/20 text-purple-400 border border-purple-500/30 px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-purple-600/40 transition-all shadow-lg"
                             >
                                 ✨ Auto-Tag
                             </button>
-                            <button onClick={() => setSelectedIds([])} className="text-[#8888a0] hover:text-white transition-colors">
+
+                            <div className="h-6 w-[1px] bg-white/10 mx-2"></div>
+
+                            <div className="flex items-center gap-2">
+                                <select 
+                                    value={bulkShelfId}
+                                    onChange={e => setBulkShelfId(e.target.value)}
+                                    className="bg-black/40 border border-white/10 text-white rounded-lg px-3 py-1.5 text-[10px] outline-none focus:border-[#e8003d] transition-colors"
+                                >
+                                    <option value="">Select Shelf...</option>
+                                    {shelves.map(s => (
+                                        <option key={s.id} value={s.id}>{s.name}</option>
+                                    ))}
+                                </select>
+                                <button 
+                                    onClick={() => handleBulkShelf('add')}
+                                    disabled={!bulkShelfId}
+                                    className="bg-blue-600/20 text-blue-400 border border-blue-500/30 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-blue-600/40 transition-all disabled:opacity-30"
+                                >
+                                    Add to Shelf
+                                </button>
+                                <button 
+                                    onClick={() => handleBulkShelf('set')}
+                                    disabled={!bulkShelfId}
+                                    className="bg-teal-600/20 text-teal-400 border border-teal-500/30 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-teal-600/40 transition-all disabled:opacity-30"
+                                >
+                                    Move to Shelf
+                                </button>
+                            </div>
+
+                            <button onClick={() => setSelectedIds([])} className="text-[#8888a0] hover:text-white transition-colors ml-2">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18M6 6l12 12"/></svg>
                             </button>
                         </div>

@@ -136,26 +136,41 @@ export default function Show({ shelf, children, comics, auth }) {
                     {comics.data.length > 0 ? (
                         <>
                             {viewMode === 'rack' ? (
-                                <div className="flex flex-col gap-12 py-8">
-                                    {/* Split comics into rows of 6 */}
+                                <div className="flex flex-col gap-0 py-4 bg-[#050508] rounded-3xl border border-white/5 shadow-2xl overflow-hidden">
                                     {Array.from({ length: Math.ceil(comics.data.length / 6) }).map((_, rowIndex) => (
-                                        <div key={rowIndex} className="relative">
-                                            {/* The Rack / Shelf Base */}
-                                            <div className="absolute -bottom-4 left-0 right-0 h-6 bg-gradient-to-b from-[#3d2b1f] to-[#1a120b] rounded-sm shadow-[0_10px_30px_rgba(0,0,0,0.6)] z-0 border-t border-white/5">
-                                                <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/10 opacity-30"></div>
-                                                <div className="absolute bottom-0 left-0 right-0 h-2 bg-black/40"></div>
+                                        <div key={rowIndex} className="relative group/row">
+                                            {/* Shelf Back Wall */}
+                                            <div className="absolute inset-0 bg-gradient-to-b from-black/40 to-transparent pointer-events-none"></div>
+                                            
+                                            {/* The Shelf Structure */}
+                                            <div className="absolute bottom-0 left-0 right-0 h-[22px] z-20 pointer-events-none">
+                                                {/* Shelf Top Surface (Depth) */}
+                                                <div className="absolute bottom-[4px] left-0 right-0 h-[18px] bg-[#1a120b] [transform:rotateX(60deg)] origin-bottom shadow-inner opacity-90"></div>
+                                                
+                                                {/* Shelf Front Edge (Lip) */}
+                                                <div className="absolute bottom-0 left-0 right-0 h-[5px] bg-gradient-to-r from-[#2a1d13] via-[#3d2b1f] to-[#2a1d13] border-t border-white/10 shadow-[0_4px_10px_rgba(0,0,0,0.8)]">
+                                                    {/* Edge Highlight */}
+                                                    <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/5"></div>
+                                                </div>
                                             </div>
                                             
-                                            {/* Comics on this Row */}
-                                            <div className="relative z-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6 sm:gap-8 px-4">
+                                            {/* Comics Container */}
+                                            <div className="relative z-10 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-6 gap-2 sm:gap-4 px-6 pt-10 pb-[22px]">
                                                 {comics.data.slice(rowIndex * 6, (rowIndex + 1) * 6).map((comic) => (
-                                                    <div key={comic.id} className="relative [perspective:1000px] group">
-                                                        <ComicCard comic={comic} auth={auth} />
-                                                        {/* Subtle shadow on the rack for each book */}
-                                                        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-[80%] h-2 bg-black/60 blur-md rounded-full -z-10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                                    <div key={comic.id} className="relative group flex justify-center items-end h-[180px] sm:h-[220px]">
+                                                        {/* Comic Card with 3D lean */}
+                                                        <div className="w-full transform transition-all duration-300 group-hover:-translate-y-2 group-hover:scale-[1.02] [transform-style:preserve-3d] [transform:rotateX(-5deg)] shadow-[0_15px_35px_rgba(0,0,0,0.8)]">
+                                                            <ComicCard comic={comic} auth={auth} />
+                                                        </div>
+                                                        
+                                                        {/* Base Shadow (Ambient Occlusion) */}
+                                                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[90%] h-4 bg-black/80 blur-md -z-10 rounded-full"></div>
                                                     </div>
                                                 ))}
                                             </div>
+                                            
+                                            {/* Row Divider / Shadow Wall */}
+                                            <div className="absolute top-0 left-0 right-0 h-10 bg-gradient-to-b from-black/60 to-transparent pointer-events-none"></div>
                                         </div>
                                     ))}
                                 </div>
