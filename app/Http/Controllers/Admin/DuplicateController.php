@@ -8,12 +8,11 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\File;
 use App\Services\LoggingService;
-use Jenssegers\ImageHash\Hash;
 
 class DuplicateController extends Controller
 {
     // Bits that can differ and still be considered the same visual content.
-    // 8 = tolerant enough for compression differences, strict enough to avoid false positives.
+    // 8 = tolerant enough for PDF compression differences, strict enough to avoid false positives.
     private const HASH_THRESHOLD = 8;
 
     public function index(Request $request)
@@ -34,7 +33,7 @@ class DuplicateController extends Controller
 
         $allComics = $query->get();
 
-        // Group by perceptual similarity (hamming distance)
+        // Group by perceptual similarity using manual hamming distance on hex strings
         $groups   = [];
         $assigned = [];
 
@@ -54,14 +53,10 @@ class DuplicateController extends Controller
 
                 if ($otherPages !== $pages) continue;
 
-                try {
-                    $distance = Hash::fromHex($hex)->distance(Hash::fromHex($otherHex));
-                    if ($distance <= self::HASH_THRESHOLD) {
-                        $group->push($other);
-                        $assigned[$other->id] = true;
-                    }
-                } catch (\Exception $e) {
-                    continue;
+                $distance = $this->hammingDistanceHex($hex, $otherHex);
+                if ($distance !== null && $distance <= self::HASH_THRESHOLD) {
+                    $group->push($other);
+                    $assigned[$other->id] = true;
                 }
             }
 
@@ -77,7 +72,7 @@ class DuplicateController extends Controller
         $slice       = array_slice($groups, ($currentPage - 1) * $perPage, $perPage);
 
         $duplicates = collect($slice)->map(function ($group) {
-            // Suggest keeping the smallest file (compressed version)
+            // Suggest keeping the smallest file (the compressed version)
             $suggestedKeepId = $group->sortBy(fn($c) => $this->getFileSizeBytes($c->path))->first()->id;
 
             return [
@@ -212,6 +207,31 @@ class DuplicateController extends Controller
         }
 
         return back()->with('success', "$count duplicate files deleted successfully.");
+    }
+
+    /**
+     * Compute hamming distance between two hex-encoded hashes.
+     * XORs each byte pair and counts set bits — no external library needed.
+     */
+    private function hammingDistanceHex(string $hex1, string $hex2): ?int
+    {
+        if (strlen($hex1) !== strlen($hex2)) return null;
+
+        $distance = 0;
+        $len = strlen($hex1);
+
+        for ($i = 0; $i < $len; $i += 2) {
+            $byte1 = hexdec(substr($hex1, $i, 2));
+            $byte2 = hexdec(substr($hex2, $i, 2));
+            $xor   = $byte1 ^ $byte2;
+
+            while ($xor) {
+                $distance += $xor & 1;
+                $xor >>= 1;
+            }
+        }
+
+        return $distance;
     }
 
     private function buildPaginationLinks(int $currentPage, int $lastPage, Request $request): array

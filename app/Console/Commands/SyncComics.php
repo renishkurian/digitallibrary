@@ -4,7 +4,6 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Services\LoggingService;
-use Jenssegers\ImageHash\Hash;
 
 class SyncComics extends Command
 {
@@ -145,9 +144,9 @@ class SyncComics extends Command
     }
 
     /**
-     * Find a comic whose perceptual hash is visually similar to $newHash.
-     * Uses hamming distance — threshold of 8 means up to 8 bits can differ out of 64.
-     * Page count must also match to avoid false positives.
+     * Find a comic whose visual hash is within hamming distance threshold.
+     * Format stored: "<hex_phash>:<page_count>"
+     * Hamming distance is computed manually from hex strings — no library version dependency.
      */
     private function findSimilarHash(string $newHash, \Illuminate\Support\Collection $hashMap, int $threshold = 8): ?\App\Models\Comic
     {
@@ -157,19 +156,42 @@ class SyncComics extends Command
         foreach ($hashMap as $existingHash => $comic) {
             [$existingHex, $existingPages] = array_pad(explode(':', $existingHash, 2), 2, null);
 
+            // Page count must match exactly to avoid false positives
             if ($existingPages !== $newPages) continue;
 
-            try {
-                $distance = Hash::fromHex($newHex)->distance(Hash::fromHex($existingHex));
-                if ($distance <= $threshold) {
-                    return $comic;
-                }
-            } catch (\Exception $e) {
-                continue;
+            $distance = $this->hammingDistanceHex($newHex, $existingHex);
+            if ($distance !== null && $distance <= $threshold) {
+                return $comic;
             }
         }
 
         return null;
+    }
+
+    /**
+     * Compute hamming distance between two hex-encoded hashes.
+     * XORs each byte pair and counts set bits — no external library needed.
+     */
+    private function hammingDistanceHex(string $hex1, string $hex2): ?int
+    {
+        if (strlen($hex1) !== strlen($hex2)) return null;
+
+        $distance = 0;
+        $len = strlen($hex1);
+
+        for ($i = 0; $i < $len; $i += 2) {
+            $byte1 = hexdec(substr($hex1, $i, 2));
+            $byte2 = hexdec(substr($hex2, $i, 2));
+            $xor   = $byte1 ^ $byte2;
+
+            // Count set bits (Brian Kernighan's algorithm)
+            while ($xor) {
+                $distance += $xor & 1;
+                $xor >>= 1;
+            }
+        }
+
+        return $distance;
     }
 
     protected function cleanTitle($name)
