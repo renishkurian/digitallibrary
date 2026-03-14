@@ -100,22 +100,41 @@ class DuplicateController extends Controller
             'exists' => File::exists($fullPath)
         ]);
 
-        // 1. Delete physical file
+        // 1. Delete physical file first
+        $fullPath = config('comics.base_dir') . '/' . ltrim($comic->path, '/');
+        $success = false;
+
         if (File::exists($fullPath)) {
-            $success = File::delete($fullPath);
+            // Attempt to delete and capture error if it fails
+            $success = @unlink($fullPath);
             if (!$success) {
-                LoggingService::error("Failed to delete physical file", ['path' => $fullPath]);
+                $error = error_get_last();
+                $permissions = substr(sprintf('%o', fileperms($fullPath)), -4);
+                $owner = function_exists('posix_getpwuid') ? posix_getpwuid(fileowner($fullPath))['name'] : fileowner($fullPath);
+
+                LoggingService::error("Failed to delete physical file", [
+                    'path' => $fullPath,
+                    'error' => $error ? $error['message'] : 'Unknown error',
+                    'permissions' => $permissions,
+                    'owner' => $owner,
+                    'is_writable' => is_writable($fullPath),
+                    'dir_writable' => is_writable(dirname($fullPath))
+                ]);
             } else {
                 LoggingService::info("Physical file deleted successfully", ['path' => $fullPath]);
             }
         } else {
             LoggingService::warning("Physical file does not exist during deletion attempt", ['path' => $fullPath]);
+            $success = true; // Treat as success for DB cleanup purposes if file is already gone
         }
 
-        // 2. Delete database record
-        $comic->delete();
+        // 2. Only delete DB record if file deletion succeeded
+        if ($success) {
+            $comic->delete();
+            return back()->with('success', 'Duplicate file deleted successfully.');
+        }
 
-        return back()->with('success', 'Duplicate file deleted successfully.');
+        return back()->with('error', 'Failed to delete the physical file. The database record has been kept to prevent data loss. Please check system logs for permission details.');
     }
 
     public function bulkDestroy(Request $request)
@@ -129,27 +148,41 @@ class DuplicateController extends Controller
         $comics = Comic::whereIn('id', $ids)->get();
         $baseDir = config('comics.base_dir');
         $count = 0;
+        $failed = 0;
 
         foreach ($comics as $comic) {
             $fullPath = $baseDir . '/' . ltrim($comic->path, '/');
-
-            LoggingService::info("Bulk deleting duplicate file", [
-                'id' => $comic->id,
-                'fullPath' => $fullPath,
-                'exists' => File::exists($fullPath)
-            ]);
+            $success = false;
 
             // Delete physical file
             if (File::exists($fullPath)) {
-                $success = File::delete($fullPath);
+                $success = @unlink($fullPath);
                 if (!$success) {
-                    LoggingService::error("Failed to bulk delete physical file", ['path' => $fullPath]);
+                    $error = error_get_last();
+                    $permissions = substr(sprintf('%o', fileperms($fullPath)), -4);
+                    $owner = function_exists('posix_getpwuid') ? posix_getpwuid(fileowner($fullPath))['name'] : fileowner($fullPath);
+
+                    LoggingService::error("Failed to bulk delete physical file", [
+                        'path' => $fullPath,
+                        'error' => $error ? $error['message'] : 'Unknown error',
+                        'permissions' => $permissions,
+                        'owner' => $owner
+                    ]);
+                    $failed++;
                 }
+            } else {
+                $success = true; // File already gone
             }
 
-            // Delete database record
-            $comic->delete();
-            $count++;
+            // Only delete database record if physical file is gone
+            if ($success) {
+                $comic->delete();
+                $count++;
+            }
+        }
+
+        if ($failed > 0) {
+            return back()->with('warning', "$count duplicates deleted. $failed files could not be deleted due to server permissions (see logs).");
         }
 
         return back()->with('success', "$count duplicate files deleted successfully.");

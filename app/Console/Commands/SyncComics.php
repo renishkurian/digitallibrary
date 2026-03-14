@@ -7,11 +7,6 @@ use App\Services\LoggingService;
 
 class SyncComics extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
     protected $signature = 'app:sync-comics';
     protected $description = 'Scan base directory and sync comics to database';
 
@@ -27,13 +22,19 @@ class SyncComics extends Command
 
         $this->info("Scanning $baseDir...");
 
-        // Pre-fetch all existing comic paths to avoid N+1 queries
-        $existingComics = \App\Models\Comic::all(['id', 'path', 'title', 'filename', 'thumbnail', 'md5_hash'])->keyBy('path');
+        // Pre-fetch all existing comics keyed by path
+        $existingComics = \App\Models\Comic::all(['id', 'path', 'title', 'filename', 'thumbnail', 'md5_hash', 'visual_hash'])->keyBy('path');
+
+        // Build a visual_hash => Comic map to detect duplicates across files
+        $visualHashMap = $existingComics
+            ->filter(fn($c) => !empty($c->visual_hash))
+            ->keyBy('visual_hash');
 
         $files = \Illuminate\Support\Facades\File::allFiles($baseDir);
         $count = 0;
         $updated = 0;
         $new = 0;
+        $skipped = 0;
         $processedPaths = [];
 
         foreach ($files as $file) {
@@ -43,33 +44,58 @@ class SyncComics extends Command
             $relativePath = str_replace($baseDir . '/', '', $absolutePath);
             $filename = $file->getFilename();
             $title = $this->cleanTitle($file->getFilenameWithoutExtension());
-            $md5Hash = \App\Models\Comic::getPartialHash($absolutePath);
 
-            // Check if comic exists in our pre-fetched map
+            // Check if this path already exists in DB
             $comic = $existingComics->get($relativePath);
 
             if (!$comic) {
-                // New Comic
+                // New file — compute visual hash to check for duplicates
+                $visualHash = \App\Models\Comic::getVisualHash($absolutePath);
+
+                if ($visualHash && $visualHashMap->has($visualHash)) {
+                    // Duplicate detected — same visual content as an existing comic
+                    $original = $visualHashMap->get($visualHash);
+                    $this->warn("Duplicate skipped: {$filename} matches existing [{$original->filename}]");
+                    $skipped++;
+                    $processedPaths[$relativePath] = true; // don't treat as orphan
+                    continue;
+                }
+
+                // Genuinely new comic
                 $comic = new \App\Models\Comic(['path' => $relativePath]);
+                $comic->visual_hash = $visualHash;
+                $comic->md5_hash = \App\Models\Comic::getPartialHash($absolutePath);
+
+                // Register in map so later files in same sync don't duplicate it
+                if ($visualHash) {
+                    $visualHashMap->put($visualHash, $comic);
+                }
+
                 $isNew = true;
             } else {
+                // Existing comic — compute visual hash only if missing
+                if (empty($comic->visual_hash)) {
+                    $comic->visual_hash = \App\Models\Comic::getVisualHash($absolutePath);
+                    if ($comic->visual_hash) {
+                        $visualHashMap->put($comic->visual_hash, $comic);
+                    }
+                }
                 $isNew = false;
             }
 
             $comic->fill([
                 'title' => $title,
                 'filename' => $filename,
-                'md5_hash' => $md5Hash,
             ]);
 
-            // 1. If we have a thumbnail in DB, verify it exists. If not, mark as null to re-search.
+            // 1. Verify thumbnail still exists on disk
             if ($comic->thumbnail && !file_exists($thumbDir . '/' . $comic->thumbnail)) {
                 $comic->thumbnail = null;
             }
 
-            // 2. Search for existing thumbnail (Name then MD5)
+            // 2. Search for existing thumbnail by filename patterns
             if (!$comic->thumbnail) {
-                $comic->thumbnail = $this->getThumbnail($absolutePath, $thumbDir, $baseDir, $md5Hash);
+                $comic->thumbnail = $this->getThumbnail($absolutePath, $thumbDir, $baseDir);
             }
 
             // Only save if dirty
@@ -85,10 +111,10 @@ class SyncComics extends Command
                 }
             }
 
-            // 3. Fallback to generation (which now also double-checks Name/MD5)
+            // 3. Fallback thumbnail generation
             if (!$comic->thumbnail) {
                 if ($comic->generateThumbnail()) {
-                    $this->info("Generated or linked thumbnail for {$title}");
+                    $this->info("Generated thumbnail for {$title}");
                 }
             }
 
@@ -96,7 +122,7 @@ class SyncComics extends Command
             $count++;
         }
 
-        // Cleanup: Remove records from database if file is no longer on disk
+        // Cleanup: Remove DB records whose files are gone
         $orphans = $existingComics->diffKeys($processedPaths);
         $deleted = $orphans->count();
 
@@ -104,12 +130,13 @@ class SyncComics extends Command
             $orphan->delete();
         }
 
-        $this->info("Scan completed. Total: $count, New: $new, Updated: $updated, Removed: $deleted.");
+        $this->info("Scan completed. Total: $count, New: $new, Updated: $updated, Duplicates skipped: $skipped, Removed: $deleted.");
 
         LoggingService::info("Comic library sync completed", [
             'total' => $count,
             'new' => $new,
             'updated' => $updated,
+            'skipped_duplicates' => $skipped,
             'removed' => $deleted,
             'base_dir' => $baseDir
         ]);
@@ -122,19 +149,19 @@ class SyncComics extends Command
         return trim($name);
     }
 
-    protected function getThumbnail($pdfPath, $thumbDir, $baseDir, $md5Hash = null)
+    protected function getThumbnail($pdfPath, $thumbDir, $baseDir)
     {
         $basename = pathinfo($pdfPath, PATHINFO_BASENAME);
         $filename = pathinfo($pdfPath, PATHINFO_FILENAME);
 
         $patterns = [
-            $basename . ".png",   // "ബാലഭൂമി.pdf.png"
-            $basename . ".PNG",   // "ബാലഭൂമി.pdf.PNG"
-            $filename . ".png",   // "ബാലഭൂമി.png"
-            $filename . ".jpg",   // "ബാലഭൂമി.jpg"
-            $filename . ".jpeg",  // "ബാലഭൂമി.jpeg"
-            str_replace('.pdf', '.PDF.png', $basename), // "ബാലഭൂമി.PDF.png"
-            str_replace('.pdf', '.Pdf.png', $basename), // "ബാലഭൂമി.Pdf.png"
+            $basename . ".png",
+            $basename . ".PNG",
+            $filename . ".png",
+            $filename . ".jpg",
+            $filename . ".jpeg",
+            str_replace('.pdf', '.PDF.png', $basename),
+            str_replace('.pdf', '.Pdf.png', $basename),
         ];
 
         foreach ($patterns as $pattern) {
