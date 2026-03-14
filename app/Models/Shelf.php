@@ -56,7 +56,7 @@ class Shelf extends Model
 
     public function getAggregateComicsCountAttribute()
     {
-        $count = $this->comics()->count();
+        $count = $this->comics()->visible()->count();
         foreach ($this->children as $child) {
             $count += $child->aggregate_comics_count;
         }

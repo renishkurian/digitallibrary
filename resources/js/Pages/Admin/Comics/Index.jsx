@@ -206,8 +206,15 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
         });
     };
 
-    const setVisibility = (v) => router.get(route('admin.comics.index'), { ...filters, visibility: v, approval: 'all' }, { replace: true, preserveScroll: false });
-    const setApprovalFilter = (a) => router.get(route('admin.comics.index'), { ...filters, approval: a, visibility: 'all' }, { replace: true, preserveScroll: false });
+    const setVisibility = (v) => router.get(route('admin.comics.index'), { ...filters, visibility: v, approval: 'all' }, { replace: true, preserveScroll: true });
+    const setApprovalFilter = (a) => router.get(route('admin.comics.index'), { ...filters, approval: a, visibility: 'all' }, { replace: true, preserveScroll: true });
+
+    const [searchQuery, setSearchQuery] = useState(filters.q || '');
+
+    const handleSearch = (e) => {
+        e.preventDefault();
+        router.get(route('admin.comics.index'), { ...filters, q: searchQuery }, { replace: true, preserveScroll: true });
+    };
 
     const approveAllPending = () => {
         requestConfirm({
@@ -380,20 +387,45 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                 </div>
 
                 <div className="flex items-center justify-between flex-wrap gap-4">
-                    <div className="flex items-center gap-1 p-1 bg-[#16161f] border border-white/7 rounded-xl w-fit">
-                        {TABS.map(tab => (
-                            <button
-                                key={tab.key}
-                                onClick={() => tab.filter === 'approval' ? setApprovalFilter(tab.key) : setVisibility(tab.key)}
-                                className={`px-5 py-2 rounded-lg text-[12px] uppercase tracking-widest font-black transition-all ${
-                                    (tab.filter === 'approval' ? filters.approval === tab.key : filters.visibility === tab.key) || (tab.key === 'all' && !filters.visibility && !filters.approval)
-                                        ? 'bg-[#e8003d] text-white shadow-lg shadow-[#e8003d]/20'
-                                        : 'text-[#8888a0] hover:text-white hover:bg-white/5'
-                                }`}
-                            >
-                                {tab.label}
-                            </button>
-                        ))}
+                    <div className="flex items-center gap-4 flex-wrap">
+                        <form onSubmit={handleSearch} className="relative flex items-center">
+                            <svg className="absolute left-3 text-[#55556a] pointer-events-none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                <circle cx="11" cy="11" r="8" />
+                                <path d="m21 21-4.35-4.35" />
+                            </svg>
+                            <input
+                                type="text"
+                                placeholder="Search by title or path..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="bg-[#16161f] border border-white/7 text-white text-[12px] py-2 pl-10 pr-4 rounded-xl w-[280px] outline-none focus:border-[#e8003d] focus:bg-white/5 transition-all"
+                            />
+                            {searchQuery && (
+                                <button 
+                                    type="button"
+                                    onClick={() => { setSearchQuery(''); router.get(route('admin.comics.index'), { ...filters, q: '' }, { replace: true }); }}
+                                    className="absolute right-3 text-[#55556a] hover:text-white transition-colors"
+                                >
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                                </button>
+                            )}
+                        </form>
+
+                        <div className="flex items-center gap-1 p-1 bg-[#16161f] border border-white/7 rounded-xl w-fit">
+                            {TABS.map(tab => (
+                                <button
+                                    key={tab.key}
+                                    onClick={() => tab.filter === 'approval' ? setApprovalFilter(tab.key) : setVisibility(tab.key)}
+                                    className={`px-5 py-2 rounded-lg text-[12px] uppercase tracking-widest font-black transition-all ${
+                                        (tab.filter === 'approval' ? filters.approval === tab.key : filters.visibility === tab.key) || (tab.key === 'all' && !filters.visibility && !filters.approval)
+                                            ? 'bg-[#e8003d] text-white shadow-lg shadow-[#e8003d]/20'
+                                            : 'text-[#8888a0] hover:text-white hover:bg-white/5'
+                                    }`}
+                                >
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     <div className="flex items-center gap-3">
@@ -402,7 +434,7 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                             onClick={approveAllPending}
                             className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-5 py-2 rounded-lg text-[11px] font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-all"
                         >
-                            ✅ Approve All Pending
+                            ✅ Approve All
                         </button>
 
                         <button 

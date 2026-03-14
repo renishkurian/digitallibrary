@@ -61,7 +61,10 @@ export default function Index({ shelves }) {
                                     )}
                                     
                                     <div className="mt-4 flex items-center justify-between text-[11px] tracking-widest uppercase font-semibold text-[#55556a]">
-                                        <span>Collection</span>
+                                        <div className="flex items-center gap-2">
+                                            <span>Collection</span>
+                                            <span className="text-[#8888a0] bg-white/5 px-1.5 py-0.5 rounded border border-white/5">{shelf.comics_count} Items</span>
+                                        </div>
                                         <span className="flex items-center gap-1.5 text-[#e8003d]/80 group-hover:text-[#e8003d] transition-colors">
                                             View Library
                                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">

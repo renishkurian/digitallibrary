@@ -38,6 +38,11 @@ export default function Show({ shelf, children, comics, auth }) {
                         <h1 className="text-3xl sm:text-5xl font-['Bebas_Neue'] tracking-[2px] sm:tracking-[4px] text-white">
                             {shelf.name}
                         </h1>
+                        <div className="flex items-center gap-4 mt-2">
+                             <div className="flex items-center gap-2 text-[11px] tracking-widest uppercase font-bold text-[#e8003d] bg-[#e8003d]/10 px-3 py-1 rounded-full border border-[#e8003d]/20">
+                                <span>{shelf.aggregate_count} {shelf.aggregate_count === 1 ? 'Comic' : 'Comics'}</span>
+                            </div>
+                        </div>
                         <p className="text-[#8888a0] text-base mt-4 leading-relaxed font-light">
                             {shelf.description || 'Explore our collection in this shelf.'}
                         </p>
@@ -83,9 +88,12 @@ export default function Show({ shelf, children, comics, auth }) {
                                     </div>
                                     
                                     <div className="p-5">
-                                        <h3 className="text-xl font-['Bebas_Neue'] tracking-wide text-white group-hover:text-[#e8003d] transition-colors">
-                                            {child.name}
-                                        </h3>
+                                        <div className="flex justify-between items-start">
+                                            <h3 className="text-xl font-['Bebas_Neue'] tracking-wide text-white group-hover:text-[#e8003d] transition-colors">
+                                                {child.name}
+                                            </h3>
+                                            <span className="text-[10px] bg-white/10 text-gray-400 px-1.5 py-0.5 rounded border border-white/5 uppercase font-bold tracking-tighter shrink-0">{child.comics_count} comics</span>
+                                        </div>
                                         <p className="text-[#8888a0] text-[13px] line-clamp-2 mt-2 leading-relaxed h-10">
                                             {child.description || 'No description available for this collection.'}
                                         </p>

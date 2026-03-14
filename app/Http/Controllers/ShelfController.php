@@ -38,46 +38,55 @@ class ShelfController extends Controller
     {
         $shelf = Shelf::findByHashId($id);
         if (!$shelf) {
-            // Fallback for numeric ID if needed for backward compatibility during transition
             $shelf = Shelf::find($id);
         }
 
         if (!$shelf) abort(404);
+
         if ($shelf->is_hidden && (!Auth::check() || !Auth::user()->is_admin)) {
             abort(403);
         }
 
-        $shelf->load('parent');
+        $shelf->load(['parent', 'children']);
 
         $allShelfIds = array_merge([$shelf->id], $shelf->getDescendantIds());
 
         $comics = \App\Models\Comic::whereHas('shelves', function ($query) use ($allShelfIds) {
             $query->whereIn('shelves.id', $allShelfIds);
         })
-            ->withCount('readers')
-            ->visible()
-            ->latest()
-            ->paginate(28)
-            ->through(fn($comic) => [
-                'id' => $comic->id,
-                'title' => $comic->title,
-                'thumbnail' => $comic->thumbnail,
-                'is_read' => Auth::check() ? $comic->isReadBy(Auth::user()) : false,
-                'readers_count' => $comic->readers_count,
-                'share_url' => $comic->share_url,
-                'rating' => $comic->rating,
-                'tags' => $comic->tags,
-            ]);
-
-        $children = $shelf->children()
             ->visible(Auth::user())
-            ->orderBy('sort_order')
-            ->get();
+            ->withCount('readers')
+            ->orderBy('title')
+            ->paginate(24);
 
         return Inertia::render('Shelves/Show', [
-            'shelf' => $shelf,
-            'children' => $children,
-            'comics' => $comics,
+            'shelf' => [
+                'id' => $shelf->hash_id,
+                'name' => $shelf->name,
+                'description' => $shelf->description,
+                'aggregate_count' => $shelf->aggregate_comics_count,
+                'parent' => $shelf->parent ? [
+                    'id' => $shelf->parent->hash_id,
+                    'name' => $shelf->parent->name
+                ] : null
+            ],
+            'children' => $shelf->children->map(fn($c) => [
+                'id' => $c->hash_id,
+                'name' => $c->name,
+                'description' => $c->description,
+                'cover_image' => $c->cover_image,
+                'comics_count' => $c->aggregate_comics_count,
+            ]),
+            'comics' => $comics->through(fn($c) => [
+                'id' => $c->hash_id,
+                'title' => $c->title,
+                'thumbnail' => $c->thumbnail,
+                'is_read' => Auth::check() ? $c->isReadBy(Auth::user()) : false,
+                'readers_count' => $c->readers_count,
+                'share_url' => $c->share_url,
+                'rating' => $c->rating,
+                'tags' => $c->tags,
+            ]),
         ]);
     }
 

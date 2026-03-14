@@ -67,11 +67,18 @@ class ComicController extends Controller
             $shelfId = $request->shelf;
             if (!is_numeric($shelfId)) {
                 $shelf = Shelf::findByHashId($shelfId);
-                $shelfId = $shelf ? $shelf->id : 0;
+            } else {
+                $shelf = Shelf::find($shelfId);
             }
-            $query->whereHas('shelves', function ($q) use ($shelfId) {
-                $q->where('shelves.id', $shelfId);
-            });
+
+            if ($shelf) {
+                $allIds = array_merge([$shelf->id], $shelf->getDescendantIds());
+                $query->whereHas('shelves', function ($q) use ($allIds) {
+                    $q->whereIn('shelves.id', $allIds);
+                });
+            } else {
+                $query->whereRaw('0=1');
+            }
         }
 
         // Category Filter
@@ -317,7 +324,8 @@ class ComicController extends Controller
             'roles'      => \Spatie\Permission\Models\Role::orderBy('name')->get(['id', 'name']),
             'filters'    => [
                 'visibility' => $visibility,
-                'approval' => $request->get('approval', 'all')
+                'approval' => $request->get('approval', 'all'),
+                'q' => $request->get('q', '')
             ],
         ]);
     }
