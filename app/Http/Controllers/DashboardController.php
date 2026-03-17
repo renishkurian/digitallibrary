@@ -25,6 +25,7 @@ class DashboardController extends Controller
             ->map(fn($c) => [
                 'id'        => $c->id,
                 'title'     => $c->title,
+                'thumbnail' => $c->thumbnail,
                 'is_hidden' => $c->is_hidden,
                 'shelf'     => $c->shelves->pluck('name')->join(', '),
                 'added'     => $c->created_at?->diffForHumans(),
