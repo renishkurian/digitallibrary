@@ -43,6 +43,12 @@ Route::middleware('auth')->group(function () {
         Route::get('/comics', [ComicController::class, 'adminIndex'])->name('comics.index');
         Route::post('/comics/{comic}/update', [ComicController::class, 'update'])->name('comics.update');
         Route::post('/comics/{comic}/visibility', [ComicController::class, 'toggleVisibility'])->name('comics.toggle-visibility');
+        Route::delete('/comics/{comic}', [ComicController::class, 'destroy'])->name('comics.destroy');
+        Route::post('/comics/{id}/restore', [ComicController::class, 'restore'])->name('comics.restore');
+        Route::delete('/comics/{id}/force-delete', [ComicController::class, 'forceDelete'])->name('comics.force-delete');
+        Route::post('/comics/bulk-trash', [ComicController::class, 'bulkTrash'])->name('comics.bulk-trash');
+        Route::post('/comics/bulk-restore', [ComicController::class, 'bulkRestore'])->name('comics.bulk-restore');
+        Route::post('/comics/bulk-force-delete', [ComicController::class, 'bulkForceDelete'])->name('comics.bulk-force-delete');
         Route::post('/comics/upload', [ComicController::class, 'upload'])->name('comics.upload');
         Route::post('/comics/{comic}/regenerate-thumbnail', [ComicController::class, 'regenerateThumbnail'])->name('comics.regenerate-thumbnail');
         Route::post('/comics/{comic}/approve', [ComicController::class, 'approve'])->name('comics.approve');

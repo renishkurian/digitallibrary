@@ -7,7 +7,7 @@ import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
-export default function Show({ comic, last_read_page, personal_shelves, bookmarks: initialBookmarks }) {
+export default function Show({ comic, last_read_page, personal_shelves, bookmarks: initialBookmarks, prev_comic, next_comic, magazine_name, display_date }) {
     const [pdfDoc, setPdfDoc] = useState(null);
     const [pageNum, setPageNum] = useState(last_read_page || 1);
     const [numPages, setNumPages] = useState(0);
@@ -495,7 +495,39 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
                             </svg>
                             <span className="hidden sm:inline">Library</span>
                         </Link>
-                        <span className="cv-title font-['Bebas_Neue'] text-[15px] sm:text-[18px] tracking-[2px] text-[#f0f0f5] truncate">{comic.title}</span>
+                        <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2 overflow-hidden">
+                            <span className="cv-title font-['Bebas_Neue'] text-[15px] sm:text-[18px] tracking-[2px] text-[#f0f0f5] truncate">{magazine_name}</span>
+                            {display_date && (
+                                <>
+                                    <span className="hidden sm:inline text-white/20">|</span>
+                                    <span className="text-[11px] sm:text-[13px] text-[#8888a0] font-medium uppercase tracking-wider">{display_date}</span>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Relative Navigation */}
+                        <div className="hidden lg:flex items-center gap-2 ml-4">
+                            {prev_comic && (
+                                <Link 
+                                    href={route('comics.show', prev_comic.id)}
+                                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[#8888a0] text-[11px] font-bold uppercase hover:bg-white/10 hover:text-white transition-all whitespace-nowrap"
+                                    title={`Previous: ${prev_comic.title}`}
+                                >
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+                                    Previous Issue
+                                </Link>
+                            )}
+                            {next_comic && (
+                                <Link 
+                                    href={route('comics.show', next_comic.id)}
+                                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[#8888a0] text-[11px] font-bold uppercase hover:bg-white/10 hover:text-white transition-all whitespace-nowrap"
+                                    title={`Next: ${next_comic.title}`}
+                                >
+                                    Next Issue
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6" /></svg>
+                                </Link>
+                            )}
+                        </div>
                         
                         {/* Desktop-only: readers badge */}
                         <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-white/5 border border-white/5 rounded-md text-[#8888a0] text-[11px] font-bold flex-shrink-0">

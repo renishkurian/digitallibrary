@@ -70,6 +70,16 @@ class Shelf extends Model
         return $count;
     }
 
+    public function getRouteKey()
+    {
+        return $this->hash_id;
+    }
+
+    public function resolveRouteBinding($value, $field = null)
+    {
+        return $this->findByHashId($value) ?? $this->where('id', $value)->first();
+    }
+
     public function getHashIdAttribute()
     {
         // Simple obfuscation for URLs
@@ -102,6 +112,7 @@ class Shelf extends Model
     public static function findByHashId($hash)
     {
         $decoded = base64_decode($hash);
+        if (!$decoded) return null;
         $id = str_replace('balarama', '', $decoded);
         return self::find($id);
     }

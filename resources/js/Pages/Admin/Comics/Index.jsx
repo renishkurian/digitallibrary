@@ -16,6 +16,8 @@ const EyeIcon     = () => <Icon d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z 
 const EyeOffIcon  = () => <Icon d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24 M1 1l22 22" />;
 const ShareIcon   = () => <Icon d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13" />;
 const XIcon       = ({ size = 14 }) => <Icon d="M18 6 6 18M6 6l12 12" size={size} stroke={2.5} />;
+const TrashIcon   = () => <Icon d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" />;
+const RefreshIcon = () => <Icon d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />;
 const SearchIcon  = () => <Icon d="M21 21l-4.35-4.35 M11 19A8 8 0 1 0 11 3a8 8 0 0 0 0 16z" stroke={2.5} />;
 
 // ─── reusable checkbox ────────────────────────────────────────────────────────
@@ -165,6 +167,21 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
         onConfirm: () => router.post(route('admin.comics.bulk-generate-ai'), { ids: selectedIds }, { onSuccess: () => { setSelectedIds([]); closeConfirm(); } })
     });
 
+    const bulkTrash = () => requestConfirm({
+        title: 'Move to Trash', message: `Move ${selectedIds.length} selected comics to Trash?`, confirmText: 'Move to Trash', confirmStyle: 'danger',
+        onConfirm: () => router.post(route('admin.comics.bulk-trash'), { ids: selectedIds }, { preserveScroll: true, onSuccess: () => { setSelectedIds([]); closeConfirm(); } })
+    });
+
+    const bulkRestore = () => requestConfirm({
+        title: 'Restore Comics', message: `Restore ${selectedIds.length} selected comics?`, confirmText: 'Restore', confirmStyle: 'primary',
+        onConfirm: () => router.post(route('admin.comics.bulk-restore'), { ids: selectedIds }, { preserveScroll: true, onSuccess: () => { setSelectedIds([]); closeConfirm(); } })
+    });
+
+    const bulkForceDelete = () => requestConfirm({
+        title: 'Delete Permanently', message: `PERMANENTLY delete ${selectedIds.length} selected comics? This cannot be undone!`, confirmText: 'Delete Permanently', confirmStyle: 'danger',
+        onConfirm: () => router.delete(route('admin.comics.bulk-force-delete'), { data: { ids: selectedIds }, preserveScroll: true, onSuccess: () => { setSelectedIds([]); closeConfirm(); } })
+    });
+
     const handleBulkShelf = (action) => {
         if (!bulkShelfId) return;
         const shelfName = shelves.find(s => s.id == bulkShelfId)?.name;
@@ -195,11 +212,27 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
         onConfirm: () => router.post(route('admin.comics.auto-tag-all-pending'), {}, { preserveScroll: true })
     });
 
+    const handleTrash = (id) => requestConfirm({
+        title: 'Move to Trash', message: 'Are you sure you want to move this comic to Trash?', confirmText: 'Move to Trash', confirmStyle: 'danger',
+        onConfirm: () => router.delete(route('admin.comics.destroy', id), { preserveScroll: true, onSuccess: closeConfirm })
+    });
+
+    const handleRestore = (id) => requestConfirm({
+        title: 'Restore Comic', message: 'Restore this comic to the main library?', confirmText: 'Restore', confirmStyle: 'primary',
+        onConfirm: () => router.post(route('admin.comics.restore', id), {}, { preserveScroll: true, onSuccess: closeConfirm })
+    });
+
+    const handleForceDelete = (id) => requestConfirm({
+        title: 'Delete Permanently', message: 'PERMANENTLY delete this comic and its files? This action cannot be undone!', confirmText: 'Delete Permanently', confirmStyle: 'danger',
+        onConfirm: () => router.delete(route('admin.comics.force-delete', id), { preserveScroll: true, onSuccess: closeConfirm })
+    });
+
     const TABS = [
         { key: 'all',     label: 'All',     filter: 'visibility' },
         { key: 'public',  label: 'Public',  filter: 'visibility' },
         { key: 'hidden',  label: 'Hidden',  filter: 'visibility' },
         { key: 'pending', label: 'Pending', filter: 'approval'   },
+        { key: 'trash',   label: 'Trash',   filter: 'approval'   },
     ];
 
     const isTabActive = (tab) =>
@@ -402,6 +435,24 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                                 className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-teal-500/25 bg-teal-500/10 text-teal-400 hover:bg-teal-500/20 disabled:opacity-30 transition-all">
                                 Move to Shelf
                             </button>
+                            <div className="w-px h-4 bg-white/10" />
+                            {filters.approval === 'trash' ? (
+                                <>
+                                    <button onClick={bulkRestore}
+                                        className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-all">
+                                        Restore
+                                    </button>
+                                    <button onClick={bulkForceDelete}
+                                        className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all">
+                                        Delete Permanently
+                                    </button>
+                                </>
+                            ) : (
+                                <button onClick={bulkTrash}
+                                    className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all">
+                                    Move to Trash
+                                </button>
+                            )}
                             <button onClick={() => setSelectedIds([])} className="ml-auto text-[#44445a] hover:text-white transition-colors">
                                 <XIcon />
                             </button>
@@ -527,9 +578,19 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                                                     </ActionBtn>
                                                 </Link>
                                                 <ActionBtn onClick={() => handleEdit(comic)} title="Edit"><EditIcon /></ActionBtn>
-                                                <ActionBtn onClick={() => syncPost(route('admin.comics.toggle-visibility', comic.id), { preserveScroll: true })} title={comic.is_hidden ? 'Unhide' : 'Hide'} variant={comic.is_hidden ? 'red' : 'ghost'}>
-                                                    {comic.is_hidden ? <EyeOffIcon /> : <EyeIcon />}
-                                                </ActionBtn>
+                                                {filters.approval === 'trash' ? (
+                                                    <>
+                                                        <ActionBtn onClick={() => handleRestore(comic.id)} title="Restore" variant="blue"><RefreshIcon /></ActionBtn>
+                                                        <ActionBtn onClick={() => handleForceDelete(comic.id)} title="Delete Permanently" variant="red"><TrashIcon /></ActionBtn>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <ActionBtn onClick={() => syncPost(route('admin.comics.toggle-visibility', comic.id), { preserveScroll: true })} title={comic.is_hidden ? 'Unhide' : 'Hide'} variant={comic.is_hidden ? 'red' : 'ghost'}>
+                                                            {comic.is_hidden ? <EyeOffIcon /> : <EyeIcon />}
+                                                        </ActionBtn>
+                                                        <ActionBtn onClick={() => handleTrash(comic.id)} title="Move to Trash" variant="red"><TrashIcon /></ActionBtn>
+                                                    </>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>

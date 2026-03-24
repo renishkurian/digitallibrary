@@ -34,12 +34,8 @@ class ShelfController extends Controller
         ]);
     }
 
-    public function show($id, Request $request)
+    public function show(Shelf $shelf, Request $request)
     {
-        $shelf = Shelf::findByHashId($id);
-        if (!$shelf) {
-            $shelf = Shelf::find($id);
-        }
 
         if (!$shelf) abort(404);
 
@@ -56,7 +52,8 @@ class ShelfController extends Controller
         })
             ->visible(Auth::user())
             ->withCount('readers')
-            ->orderBy('title')
+            ->orderBy('published_date', 'desc')
+            ->orderBy('title', 'asc')
             ->paginate(24);
 
         return Inertia::render('Shelves/Show', [
@@ -80,8 +77,11 @@ class ShelfController extends Controller
             'comics' => $comics->through(fn($c) => [
                 'id' => $c->hash_id,
                 'title' => $c->title,
+                'filename' => $c->filename,
+                'published_date' => $c->published_date ? $c->published_date->format('Y-m-d') : null,
                 'thumbnail' => $c->thumbnail,
                 'is_read' => Auth::check() ? $c->isReadBy(Auth::user()) : false,
+                'is_personal' => $c->is_personal,
                 'readers_count' => $c->readers_count,
                 'share_url' => $c->share_url,
                 'rating' => $c->rating,

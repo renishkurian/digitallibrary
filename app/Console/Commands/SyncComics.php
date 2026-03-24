@@ -255,11 +255,12 @@ class SyncComics extends Command
         $filename = pathinfo($pdfPath, PATHINFO_FILENAME);
 
         $patterns = [
-            $basename . ".png",
-            $basename . ".PNG",
-            $filename . ".png",
             $filename . ".jpg",
             $filename . ".jpeg",
+            $basename . ".jpg",
+            $basename . ".jpeg",
+            $basename . ".png",
+            $filename . ".png",
             str_replace('.pdf', '.PDF.png', $basename),
             str_replace('.pdf', '.Pdf.png', $basename),
         ];

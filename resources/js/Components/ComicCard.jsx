@@ -8,7 +8,7 @@ export default function ComicCard({ comic, auth, compact = false }) {
 
     const toTitleCase = (str, stripMagazine = false) => {
         if (!str) return '';
-        let clean = str.replace(/\.pdf$/i, '');
+        let clean = String(str).replace(/\.pdf$/i, '');
         if (stripMagazine) {
             clean = clean.replace(/balarama|balabhumi|kalakaumudi|fire|mangalam|mathrubhumi|manorama|arogyamasika|fasttrack|tell me why|vanitha/gi, '').trim();
         }

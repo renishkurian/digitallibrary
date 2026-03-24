@@ -3,11 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Jenssegers\ImageHash\ImageHash;
 use Jenssegers\ImageHash\Implementations\DifferenceHash;
 
 class Comic extends Model
 {
+    use SoftDeletes;
     protected $fillable = [
         'title',
         'description',
@@ -42,6 +44,16 @@ class Comic extends Model
         'published_date' => 'date',
     ];
 
+    public function getRouteKey()
+    {
+        return $this->hash_id;
+    }
+
+    public function resolveRouteBinding($value, $field = null)
+    {
+        return $this->findByHashId($value) ?? $this->where('id', $value)->first();
+    }
+
     public function getHashIdAttribute()
     {
         return base64_encode($this->id . 'comic_vault');
@@ -51,6 +63,7 @@ class Comic extends Model
     {
         try {
             $decoded = base64_decode($hash);
+            if (!$decoded) return null;
             $id = str_replace('comic_vault', '', $decoded);
             return self::find($id);
         } catch (\Exception $e) {
@@ -264,11 +277,12 @@ class Comic extends Model
         $filename = pathinfo($absolutePdfPath, PATHINFO_FILENAME);
 
         $patterns = [
-            $basename . ".png",
-            $basename . ".PNG",
-            $filename . ".png",
             $filename . ".jpg",
             $filename . ".jpeg",
+            $basename . ".jpg",
+            $basename . ".jpeg",
+            $basename . ".png",
+            $filename . ".png",
             str_replace('.pdf', '.PDF.png', $basename),
             str_replace('.pdf', '.Pdf.png', $basename),
         ];
@@ -287,18 +301,18 @@ class Comic extends Model
         $pdfPathEscaped = escapeshellarg($absolutePdfPath);
         $tempPrefixEscaped = escapeshellarg($tempPrefix);
 
-        $command = "pdftoppm -f 1 -l 1 -png " . $pdfPathEscaped . " " . $tempPrefixEscaped . " 2>&1";
+        $command = "pdftoppm -f 1 -l 1 -jpeg -scale-to 800 -jpegopt quality=80 " . $pdfPathEscaped . " " . $tempPrefixEscaped . " 2>&1";
         exec($command, $output, $returnVar);
 
-        $generatedFiles = glob($tempPrefix . "-*.png");
-        $finalFile = $filename . ".png";
+        $generatedFiles = glob($tempPrefix . "-*.jpg");
+        $finalFile = $filename . ".jpg";
 
         if ($returnVar === 0 && !empty($generatedFiles)) {
             $generatedFile = $generatedFiles[0];
             rename($generatedFile, $thumbDir . '/' . $finalFile);
             $this->update(['thumbnail' => $finalFile]);
 
-            foreach (glob($tempPrefix . "-*.png") as $extra) {
+            foreach (glob($tempPrefix . "-*.jpg") as $extra) {
                 @unlink($extra);
             }
             return true;

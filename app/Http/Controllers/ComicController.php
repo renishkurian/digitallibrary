@@ -158,7 +158,7 @@ class ComicController extends Controller
                     'share_url' => $comic->share_url,
                     'rating' => $comic->rating,
                     'tags' => $comic->tags,
-                    'published_date' => $comic->published_date ? $comic->published_date->format('Y-m-d') : null,
+                    'published_date' => $comic->published_date ? $comic->published_date->format('F Y') : null,
                 ];
             });
 
@@ -227,17 +227,29 @@ class ComicController extends Controller
         ]);
     }
 
-    public function show($id)
+    public function show(Comic $comic)
     {
-        $comic = Comic::findByHashId($id);
-        if (!$comic) {
-            $comic = Comic::find($id);
-        }
+        // Re-calculate or find previous/next issues
+        $comic->load(['shelves']);
+        $shelf = $comic->shelves->first();
+        $prev = null;
+        $next = null;
 
-        if (!$comic) abort(404);
+        if ($shelf) {
+            // Basic ordering: published_date DESC, title ASC, id DESC
+            $allComics = $shelf->comics()
+                ->orderByRaw('CASE WHEN published_date IS NULL THEN 0 ELSE 1 END DESC')
+                ->orderByDesc('published_date')
+                ->orderBy('title')
+                ->orderByDesc('id')
+                ->get();
 
-        if ($comic->is_hidden && (!Auth::check() || !Auth::user()->is_admin)) {
-            abort(403);
+            $currentIndex = $allComics->search(fn($c) => $c->id === $comic->id);
+
+            if ($currentIndex !== false) {
+                if ($currentIndex > 0) $prev = $allComics[$currentIndex - 1];
+                if ($currentIndex < $allComics->count() - 1) $next = $allComics[$currentIndex + 1];
+            }
         }
 
         $comic->loadCount('readers');
@@ -270,6 +282,8 @@ class ComicController extends Controller
             'last_read_page' => $lastReadPage,
             'personal_shelves' => $personalShelves,
             'bookmarks' => $bookmarks,
+            'prev_issue' => $prev ? ['id' => $prev->hash_id, 'title' => $prev->title] : null,
+            'next_issue' => $next ? ['id' => $next->hash_id, 'title' => $next->title] : null,
         ]);
     }
 
@@ -324,15 +338,8 @@ class ComicController extends Controller
         return response()->json(['success' => true]);
     }
 
-    public function serve($id)
+    public function serve(Comic $comic)
     {
-        $comic = Comic::findByHashId($id);
-        if (!$comic) {
-            $comic = Comic::find($id);
-        }
-
-        if (!$comic) abort(404);
-
         /** @var \App\Models\User|null $user */
         $user = Auth::user();
 
@@ -342,26 +349,16 @@ class ComicController extends Controller
             $isShared     = $user && $comic->sharedWith()->where('user_id', $user->id)->exists();
 
             if (!$isAdmin && !$isUploader && !$isShared) {
-                // If it's a personal PDF, ONLY the uploader/admin can see it
-                // is_personal takes precedence over sharing in terms of policy? 
-                // Actually, if it's personal, uploader probably doesn't want to share it, but shared users could see it if uploader explicitly shared it.
                 abort(403);
             }
         }
 
         $baseDir = rtrim(config('comics.base_dir'), '/');
-        // Decode the path in case it contains URL-encoded characters like %20 for spaces
         $comicPath = urldecode(ltrim($comic->path, '/'));
-
         $path = $baseDir . '/' . $comicPath;
 
         if (!File::exists($path)) {
-            return response()->json([
-                'error' => 'File not found',
-                'attempted_path' => $path,
-                'base_dir' => $baseDir,
-                'comic_path' => $comicPath
-            ], 404);
+            abort(404, "File not found at $path");
         }
 
         return response()->file($path, [
@@ -404,10 +401,18 @@ class ComicController extends Controller
     // Admin Methods
     public function adminIndex(Request $request)
     {
-        $query = Comic::with('shelves', 'categories', 'sharedWith', 'uploader')->withCount('readers')->latest();
+        $statusFilter = $request->get('approval', 'all');
+        $query = Comic::with('shelves', 'categories', 'sharedWith', 'uploader')
+            ->withCount('readers');
+
+        if ($statusFilter === 'trash') {
+            $query->onlyTrashed();
+        } else {
+            $query->latest();
+        }
 
         // Approval filter
-        if ($request->get('approval') === 'pending') {
+        if ($statusFilter === 'pending') {
             $query->where('is_approved', false)->where('is_personal', false);
         }
 
@@ -503,6 +508,87 @@ class ComicController extends Controller
     {
         $comic->update(['is_hidden' => !$comic->is_hidden]);
         return back()->with('success', 'Visibility toggled.');
+    }
+
+    public function destroy(Comic $comic)
+    {
+        $comic->delete();
+        return back()->with('success', 'Comic moved to trash.');
+    }
+
+    public function restore($id)
+    {
+        $comic = Comic::onlyTrashed()->findOrFail($id);
+        $comic->restore();
+        return back()->with('success', 'Comic restored.');
+    }
+
+    public function forceDelete($id)
+    {
+        $comic = Comic::onlyTrashed()->findOrFail($id);
+
+        // Delete thumbnail
+        if ($comic->thumbnail) {
+            $thumbPath = config('comics.thumb_dir') . '/' . $comic->thumbnail;
+            if (File::exists($thumbPath)) File::delete($thumbPath);
+        }
+
+        // Delete PDF
+        $baseDir = rtrim(config('comics.base_dir'), '/');
+        $fullPath = $baseDir . '/' . ltrim($comic->path, '/');
+        if (File::exists($fullPath)) File::delete($fullPath);
+
+        $comic->forceDelete();
+        return back()->with('success', 'Comic permanently deleted.');
+    }
+
+    public function bulkTrash(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:comics,id',
+        ]);
+
+        Comic::whereIn('id', $request->ids)->delete();
+        return back()->with('success', count($request->ids) . ' comics moved to trash.');
+    }
+
+    public function bulkRestore(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:comics,id',
+        ]);
+
+        Comic::onlyTrashed()->whereIn('id', $request->ids)->restore();
+        return back()->with('success', count($request->ids) . ' comics restored.');
+    }
+
+    public function bulkForceDelete(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:comics,id',
+        ]);
+
+        $comics = Comic::onlyTrashed()->whereIn('id', $request->ids)->get();
+        $count = $comics->count();
+
+        foreach ($comics as $comic) {
+            // Delete thumbnail
+            if ($comic->thumbnail) {
+                $thumbPath = config('comics.thumb_dir') . '/' . $comic->thumbnail;
+                if (File::exists($thumbPath)) File::delete($thumbPath);
+            }
+            // Delete PDF
+            $baseDir = rtrim(config('comics.base_dir'), '/');
+            $fullPath = $baseDir . '/' . ltrim($comic->path, '/');
+            if (File::exists($fullPath)) File::delete($fullPath);
+
+            $comic->forceDelete();
+        }
+
+        return back()->with('success', $count . ' comics permanently deleted.');
     }
 
     public function upload(Request $request)
