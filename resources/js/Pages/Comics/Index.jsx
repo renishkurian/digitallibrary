@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, Head } from '@inertiajs/react';
+import { Link, Head, router } from '@inertiajs/react';
 import ComicLayout from '@/Layouts/ComicLayout';
 import ComicCard from '@/Components/ComicCard';
 import Pagination from '@/Components/Pagination';
@@ -237,51 +237,98 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
                     )}
 
                     <div className="flex flex-col gap-4">
-                        <h3 className="text-[11px] tracking-[3px] uppercase font-black text-[#55556a]">Shelves</h3>
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-[11px] tracking-[3px] uppercase font-black text-[#55556a]">Shelves</h3>
+                            {filters.shelf && (
+                                <button 
+                                    onClick={() => router.get(route('comics.index', { ...filters, shelf: null }), {}, { preserveState: true })}
+                                    className="text-[9px] text-[#e8003d] hover:text-[#ff0044] font-bold uppercase tracking-wider transition-colors"
+                                >Clear</button>
+                            )}
+                        </div>
                         <div className="flex flex-col gap-1">
-                            <Link 
-                                href={route('comics.index', { ...filters, shelf: null })}
-                                className={`text-[13px] py-1.5 px-3 rounded-lg transition-all ${!filters.shelf ? 'bg-[#e8003d]/10 text-[#e8003d] font-bold' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}
+                            <button 
+                                onClick={() => router.get(route('comics.index', { ...filters, shelf: null }), {}, { preserveState: true })}
+                                className={`text-[13px] py-1.5 px-3 rounded-lg transition-all text-left ${!filters.shelf ? 'bg-[#e8003d]/10 text-[#e8003d] font-bold' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}
                             >
                                 All Shelves
-                            </Link>
-                            {shelves.map(shelf => (
-                                <div key={shelf.id} className="flex flex-col gap-1">
-                                    <Link 
-                                        href={route('comics.index', { ...filters, shelf: shelf.id })}
-                                        className={`text-[13px] py-1.5 px-3 rounded-lg transition-all flex items-center gap-2 min-w-0 ${filters.shelf == shelf.id ? 'bg-[#e8003d]/10 text-[#e8003d] font-bold' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}
-                                    >
-                                        <div className="w-6 h-6 rounded overflow-hidden border border-white/10 shrink-0 bg-[#0d0d14]">
-                                            {shelf.cover_image ? (
-                                                <img src={`/shelves/${shelf.cover_image}`} className="w-full h-full object-cover" alt="" />
-                                            ) : (
-                                                <div className="w-full h-full flex items-center justify-center text-[8px] text-[#55556a] uppercase font-black">NA</div>
-                                            )}
-                                        </div>
-                                        <div className="flex-1 flex items-center justify-between min-w-0">
-                                            <span className="truncate">{shelf.name}</span>
-                                            <span className="text-[10px] text-[#55556a] font-black bg-white/5 px-1.5 py-0.5 rounded ml-2">
-                                                {shelf.comics_count}
-                                            </span>
-                                        </div>
-                                    </Link>
-                                    
-                                    {shelf.children?.length > 0 && (
-                                        <div className="flex flex-col gap-1 ml-4 border-l border-white/5 pl-2 mt-1">
-                                            {shelf.children.map(child => (
-                                                <Link 
-                                                    key={child.id}
-                                                    href={route('comics.index', { ...filters, shelf: child.id })}
-                                                    className={`text-[12px] py-1 px-3 rounded-lg transition-all flex items-center justify-between min-w-0 ${filters.shelf == child.id ? 'text-[#e8003d] font-bold bg-[#e8003d]/5' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}
-                                                >
-                                                    <span className="truncate">{child.name}</span>
-                                                    <span className="text-[9px] opacity-60 ml-2">{child.comics_count}</span>
-                                                </Link>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
+                            </button>
+                            {shelves.map(shelf => {
+                                const selectedIds = filters.shelf ? filters.shelf.split(',') : [];
+                                const isSelected = selectedIds.includes(String(shelf.id));
+                                const toggleShelf = (id) => {
+                                    let newIds = [...selectedIds];
+                                    const idStr = String(id);
+                                    if (newIds.includes(idStr)) {
+                                        newIds = newIds.filter(i => i !== idStr);
+                                    } else {
+                                        newIds.push(idStr);
+                                    }
+                                    const shelfParam = newIds.length > 0 ? newIds.join(',') : null;
+                                    router.get(route('comics.index', { ...filters, shelf: shelfParam }), {}, { preserveState: true });
+                                };
+                                return (
+                                    <div key={shelf.id} className="flex flex-col gap-1">
+                                        <button 
+                                            onClick={() => toggleShelf(shelf.id)}
+                                            className={`text-[13px] py-1.5 px-3 rounded-lg transition-all flex items-center gap-2 min-w-0 text-left ${isSelected ? 'bg-[#e8003d]/10 text-[#e8003d] font-bold' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}
+                                        >
+                                            {/* Checkbox indicator */}
+                                            <div className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-all ${
+                                                isSelected 
+                                                    ? 'bg-[#e8003d] border-[#e8003d]' 
+                                                    : 'border-white/20 bg-white/5'
+                                            }`}>
+                                                {isSelected && (
+                                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                                                )}
+                                            </div>
+                                            <div className="w-6 h-6 rounded overflow-hidden border border-white/10 shrink-0 bg-[#0d0d14]">
+                                                {shelf.cover_image ? (
+                                                    <img src={`/shelves/${shelf.cover_image}`} className="w-full h-full object-cover" alt="" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-[8px] text-[#55556a] uppercase font-black">NA</div>
+                                                )}
+                                            </div>
+                                            <div className="flex-1 flex items-center justify-between min-w-0">
+                                                <span className="truncate">{shelf.name}</span>
+                                                <span className="text-[10px] text-[#55556a] font-black bg-white/5 px-1.5 py-0.5 rounded ml-2">
+                                                    {shelf.comics_count}
+                                                </span>
+                                            </div>
+                                        </button>
+                                        
+                                        {shelf.children?.length > 0 && (
+                                            <div className="flex flex-col gap-1 ml-4 border-l border-white/5 pl-2 mt-1">
+                                                {shelf.children.map(child => {
+                                                    const childSelected = selectedIds.includes(String(child.id));
+                                                    return (
+                                                        <button 
+                                                            key={child.id}
+                                                            onClick={() => toggleShelf(child.id)}
+                                                            className={`text-[12px] py-1 px-3 rounded-lg transition-all flex items-center gap-2 justify-between min-w-0 text-left ${childSelected ? 'text-[#e8003d] font-bold bg-[#e8003d]/5' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}
+                                                        >
+                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                <div className={`w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center transition-all ${
+                                                                    childSelected 
+                                                                        ? 'bg-[#e8003d] border-[#e8003d]' 
+                                                                        : 'border-white/20 bg-white/5'
+                                                                }`}>
+                                                                    {childSelected && (
+                                                                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                                                                    )}
+                                                                </div>
+                                                                <span className="truncate">{child.name}</span>
+                                                            </div>
+                                                            <span className="text-[9px] opacity-60 ml-2">{child.comics_count}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
 

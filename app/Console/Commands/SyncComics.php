@@ -45,6 +45,32 @@ class SyncComics extends Command
             $filename     = $file->getFilename();
             $title        = $this->cleanTitle($file->getFilenameWithoutExtension());
 
+            $dirPath = dirname($relativePath);
+            $deepestShelfId = null;
+
+            if ($dirPath && $dirPath !== '.') {
+                $parts = explode('/', $dirPath);
+                $parentId = null;
+
+                foreach ($parts as $part) {
+                    $shelf = \App\Models\Shelf::whereRaw('LOWER(name) = ?', [strtolower($part)])
+                        ->where('parent_id', $parentId)
+                        ->first();
+
+                    if (!$shelf) {
+                        $shelf = \App\Models\Shelf::create([
+                            'name' => $part,
+                            'parent_id' => $parentId,
+                            'is_common' => true,
+                            'user_id' => null,
+                            'is_hidden' => false,
+                        ]);
+                    }
+                    $parentId = $shelf->id;
+                }
+                $deepestShelfId = $parentId;
+            }
+
             $comic = $existingComics->get($relativePath);
 
             if (!$comic) {
@@ -89,6 +115,24 @@ class SyncComics extends Command
                 'filename' => $filename,
             ]);
 
+            // Extract date from filename (e.g. "April_12_2024" or "2018_9_21")
+            $publishedDate = \App\Models\Comic::parseDateFromFilename($filename);
+            if (!$publishedDate) {
+                $publishedDate = \App\Models\Comic::parseDateFromFilename($title);
+            }
+
+            if ($publishedDate) {
+                $comic->published_date = $publishedDate;
+            }
+
+            // Calculate page count if missing or zero
+            if (!$comic->pages_count) {
+                $comic->pages_count = \App\Models\Comic::getPageCount($absolutePath);
+            }
+
+            // Store file size
+            $comic->file_size = filesize($absolutePath);
+
             // 1. Verify thumbnail still exists on disk
             if ($comic->thumbnail && !file_exists($thumbDir . '/' . $comic->thumbnail)) {
                 $comic->thumbnail = null;
@@ -110,6 +154,10 @@ class SyncComics extends Command
                 } else {
                     $updated++;
                 }
+            }
+
+            if ($deepestShelfId && $comic->exists) {
+                $comic->shelves()->syncWithoutDetaching([$deepestShelfId]);
             }
 
             // 3. Fallback thumbnail generation

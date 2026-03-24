@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Comic;
 use App\Models\Setting;
+use App\Models\Shelf;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -44,6 +45,32 @@ class SyncComicsJob implements ShouldQueue
                 $filename = $file->getFilename();
                 $title = $this->cleanTitle($file->getFilenameWithoutExtension());
 
+                $dirPath = dirname($relativePath);
+                $deepestShelfId = null;
+
+                if ($dirPath && $dirPath !== '.') {
+                    $parts = explode('/', $dirPath);
+                    $parentId = null;
+
+                    foreach ($parts as $part) {
+                        $shelf = Shelf::whereRaw('LOWER(name) = ?', [strtolower($part)])
+                            ->where('parent_id', $parentId)
+                            ->first();
+
+                        if (!$shelf) {
+                            $shelf = Shelf::create([
+                                'name' => $part,
+                                'parent_id' => $parentId,
+                                'is_common' => true,
+                                'user_id' => null,
+                                'is_hidden' => false,
+                            ]);
+                        }
+                        $parentId = $shelf->id;
+                    }
+                    $deepestShelfId = $parentId;
+                }
+
                 $comic = $existingComics->get($relativePath);
                 $isNew = !$comic;
 
@@ -55,6 +82,24 @@ class SyncComicsJob implements ShouldQueue
                     'title' => $title,
                     'filename' => $filename,
                 ]);
+
+                // Calculate page count if missing or zero
+                if (!$comic->pages_count) {
+                    $comic->pages_count = Comic::getPageCount($absolutePath);
+                }
+
+                // Store file size
+                $comic->file_size = filesize($absolutePath);
+
+                // Extract date from title (e.g. "October 01 2018" or "Jan 13 2025")
+                if (preg_match('/(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+(?:\d{1,2}\s*,?\s*)?\d{4}/i', $title, $matches)) {
+                    try {
+                        $parsedDate = \Carbon\Carbon::parse($matches[0]);
+                        $comic->created_at = $parsedDate;
+                    } catch (\Exception $e) {
+                        // Keep default if parsing fails
+                    }
+                }
 
                 if ($comic->thumbnail && !file_exists($thumbDir . '/' . $comic->thumbnail)) {
                     $comic->thumbnail = null;
@@ -69,6 +114,11 @@ class SyncComicsJob implements ShouldQueue
                     if ($isNew && Setting::get('ai_enabled') == '1') {
                         ProcessComicAIJob::dispatch($comic);
                     }
+                }
+
+                if ($deepestShelfId) {
+                    // Only sync to the folder's shelf if it's new or doesn't have it.
+                    $comic->shelves()->syncWithoutDetaching([$deepestShelfId]);
                 }
 
                 if (!$comic->thumbnail) {

@@ -15,6 +15,12 @@ class Shelf extends Model
         'sort_order',
         'is_common',
         'user_id',
+        'is_hidden',
+    ];
+
+    protected $casts = [
+        'is_hidden' => 'boolean',
+        'is_common' => 'boolean',
     ];
 
     public function user()
@@ -56,7 +62,8 @@ class Shelf extends Model
 
     public function getAggregateComicsCountAttribute()
     {
-        $count = $this->comics()->visible()->count();
+        $user = auth()->check() ? auth()->user() : null;
+        $count = $this->comics()->visible($user)->count();
         foreach ($this->children as $child) {
             $count += $child->aggregate_comics_count;
         }
@@ -67,6 +74,29 @@ class Shelf extends Model
     {
         // Simple obfuscation for URLs
         return base64_encode($this->id . 'balarama');
+    }
+
+    public function getDisplayCoverImageAttribute()
+    {
+        if ($this->cover_image) {
+            return '/shelves/' . $this->cover_image;
+        }
+
+        $user = auth()->check() ? auth()->user() : null;
+        $comic = $this->comics()->visible($user)->whereNotNull('thumbnail')->latest()->first();
+
+        if (!$comic && $this->children()->count() > 0) {
+            foreach ($this->children as $child) {
+                $comic = $child->comics()->visible($user)->whereNotNull('thumbnail')->latest()->first();
+                if ($comic) break;
+            }
+        }
+
+        if ($comic && $comic->thumbnail) {
+            return '/thumbs/' . $comic->thumbnail;
+        }
+
+        return null;
     }
 
     public static function findByHashId($hash)
@@ -80,12 +110,21 @@ class Shelf extends Model
     {
         $user = $user ?? auth()->user();
 
-        return $query->where('is_hidden', false)
-            ->where(function ($q) use ($user) {
-                $q->where('is_common', true);
+        return $query->where(function ($q) use ($user) {
+            // Admins see everything
+            if ($user && isset($user->is_admin) && $user->is_admin) {
+                return $q;
+            }
+
+            // Normal visibility rules
+            $q->where('is_hidden', false);
+
+            $q->where(function ($inner) use ($user) {
+                $inner->where('is_common', true);
                 if ($user) {
-                    $q->orWhere('user_id', $user->id);
+                    $inner->orWhere('user_id', $user->id);
                 }
             });
+        });
     }
 }

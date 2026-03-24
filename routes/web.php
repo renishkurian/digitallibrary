@@ -16,6 +16,7 @@ Route::get('/', function () {
 Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::get('/', [ComicController::class, 'index'])->name('comics.index');
+Route::get('/calendar', [ComicController::class, 'calendar'])->name('comics.calendar');
 Route::get('/comics/{comic}', [ComicController::class, 'show'])->name('comics.show');
 Route::get('/comics/{comic}/serve', [ComicController::class, 'serve'])->name('comics.serve');
 Route::get('/s/{id}', [ComicController::class, 'share'])->name('comics.shared');
@@ -33,6 +34,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/comics/{comic}/read', [ComicController::class, 'toggleRead'])->name('comics.toggle-read');
     Route::post('/comics/{comic}/page', [ComicController::class, 'updateLastReadPage'])->name('comics.update-page');
     Route::post('/comics/{comic}/sync-time', [ComicController::class, 'syncReadingTime'])->name('comics.sync-time');
+    Route::post('/comics/{comic}/shelves', [ComicController::class, 'addToPersonalShelf'])->name('comics.add-to-shelf');
+    Route::post('/comics/{comic}/bookmarks', [ComicController::class, 'addBookmark'])->name('comics.add-bookmark');
+    Route::delete('/comics/{comic}/bookmarks/{bookmark}', [ComicController::class, 'removeBookmark'])->name('comics.remove-bookmark');
 
     // Admin Routes
     Route::middleware('admin')->prefix('admin')->name('admin.')->group(function () {

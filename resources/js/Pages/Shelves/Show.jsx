@@ -73,7 +73,7 @@ export default function Show({ shelf, children, comics, auth }) {
                                     <div className="aspect-[16/9] w-full bg-[#0d0d14] relative overflow-hidden">
                                         {child.cover_image ? (
                                             <img 
-                                                src={`/shelves/${child.cover_image}`} 
+                                                src={child.cover_image} 
                                                 alt={child.name} 
                                                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                                             />

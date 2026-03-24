@@ -62,19 +62,27 @@ class ComicController extends Controller
             }
         }
 
-        // Shelf Filter
-        if ($request->has('shelf')) {
-            $shelfId = $request->shelf;
-            if (!is_numeric($shelfId)) {
-                $shelf = Shelf::findByHashId($shelfId);
-            } else {
-                $shelf = Shelf::find($shelfId);
+        // Shelf Filter (supports comma-separated IDs for multi-select)
+        if ($request->filled('shelf')) {
+            $shelfParams = array_filter(explode(',', $request->shelf));
+            $allShelfIds = [];
+
+            foreach ($shelfParams as $shelfId) {
+                $shelfId = trim($shelfId);
+                if (!is_numeric($shelfId)) {
+                    $shelf = Shelf::findByHashId($shelfId);
+                } else {
+                    $shelf = Shelf::find($shelfId);
+                }
+
+                if ($shelf) {
+                    $allShelfIds = array_merge($allShelfIds, [$shelf->id], $shelf->getDescendantIds());
+                }
             }
 
-            if ($shelf) {
-                $allIds = array_merge([$shelf->id], $shelf->getDescendantIds());
-                $query->whereHas('shelves', function ($q) use ($allIds) {
-                    $q->whereIn('shelves.id', $allIds);
+            if (!empty($allShelfIds)) {
+                $query->whereHas('shelves', function ($q) use ($allShelfIds) {
+                    $q->whereIn('shelves.id', array_unique($allShelfIds));
                 });
             } else {
                 $query->whereRaw('0=1');
@@ -103,10 +111,31 @@ class ComicController extends Controller
             if ($request->filled('hidden')) {
                 $query->where('is_hidden', true);
             }
+
+            // Hide items mapped to user's personal shelves from global/default views
+            $isViewingPersonalShelf = false;
+            if (isset($shelf) && $shelf->user_id === $userId) {
+                $isViewingPersonalShelf = true;
+            }
+
+            if (!$isViewingPersonalShelf && !$request->filled('personal') && !$request->filled('q')) {
+                $query->whereDoesntHave('shelves', function ($q) use ($userId) {
+                    $q->where('user_id', $userId);
+                });
+            }
         }
 
         if (!$request->filled('status') || $request->status !== 'history') {
-            $query->latest();
+            if (!$request->filled('q')) {
+                // Default sort: Published date first (DESC), then ID (DESC)
+                // We use CASE to put NULL published_dates at the end if desired, 
+                // but usually for magazines we want them together.
+                $query->orderByRaw('CASE WHEN published_date IS NULL THEN 0 ELSE 1 END DESC')
+                    ->orderByDesc('published_date')
+                    ->orderByDesc('id');
+            } else {
+                $query->latest();
+            }
         }
 
         $comics = $query->paginate(28)
@@ -116,7 +145,11 @@ class ComicController extends Controller
                 return [
                     'id' => $comic->hash_id,
                     'title' => $comic->title,
+                    'filename' => $comic->filename,
+                    'file_size' => $comic->file_size,
+                    'pages_count' => $comic->pages_count,
                     'thumbnail' => $comic->thumbnail,
+                    'shelves' => $comic->shelves->pluck('name'),
                     'is_read' => Auth::check() ? $comic->isReadBy(Auth::user()) : false,
                     'is_hidden' => (bool) $comic->is_hidden,
                     'is_personal' => (bool) $comic->is_personal,
@@ -125,6 +158,7 @@ class ComicController extends Controller
                     'share_url' => $comic->share_url,
                     'rating' => $comic->rating,
                     'tags' => $comic->tags,
+                    'published_date' => $comic->published_date ? $comic->published_date->format('Y-m-d') : null,
                 ];
             });
 
@@ -148,18 +182,48 @@ class ComicController extends Controller
             'comics' => $comics,
             'recentlyRead' => $recentlyRead,
             'filters' => $request->only(['q', 'status', 'shelf', 'category', 'personal', 'shared', 'hidden']),
-            'shelves' => Shelf::visible(Auth::user())->whereNull('parent_id')->with(['children' => fn($q) => $q->visible(Auth::user())])->orderBy('sort_order')->get()->map(fn($s) => [
+            'shelves' => Shelf::visible(Auth::user())->whereNull('parent_id')->with(['children' => fn($q) => $q->visible(Auth::user())])->orderBy('name')->get()->map(fn($s) => [
                 'id' => $s->hash_id,
-                'name' => $s->name,
-                'cover_image' => $s->cover_image,
+                'name' => ucfirst(str_replace('_', ' ', $s->name)),
+                'cover_image' => $s->display_cover_image,
                 'comics_count' => $s->aggregate_comics_count,
                 'children' => $s->children->map(fn($c) => [
                     'id' => $c->hash_id,
-                    'name' => $c->name,
+                    'name' => ucfirst(str_replace('_', ' ', $c->name)),
                     'comics_count' => $c->aggregate_comics_count,
                 ])
             ]),
             'categories' => Category::visible(Auth::user())->whereNull('parent_id')->with('children')->orderBy('sort_order')->get(),
+        ]);
+    }
+
+    public function calendar(Request $request)
+    {
+        $month = $request->input('month', now()->month);
+        $year = $request->input('year', now()->year);
+
+        $query = Comic::query();
+        if (!Auth::check() || !Auth::user()->is_admin) {
+            $query->visible();
+        }
+
+        $comics = $query->whereYear('created_at', $year)
+            ->whereMonth('created_at', $month)
+            ->get()
+            ->map(function ($comic) {
+                return [
+                    'id' => $comic->hash_id,
+                    'title' => $comic->title,
+                    'thumbnail' => $comic->thumbnail,
+                    'date' => $comic->created_at->format('Y-m-d'),
+                ];
+            })
+            ->groupBy('date');
+
+        return Inertia::render('Comics/Calendar', [
+            'comicsByDate' => $comics,
+            'month' => $month,
+            'year' => $year,
         ]);
     }
 
@@ -186,10 +250,78 @@ class ComicController extends Controller
             }
         }
 
+        $personalShelves = [];
+        if (Auth::check()) {
+            $personalShelves = Shelf::where('user_id', Auth::id())->get(['id', 'name'])->map(function ($s) {
+                return ['id' => $s->id, 'name' => ucfirst(str_replace('_', ' ', $s->name))];
+            });
+        }
+
+        $bookmarks = [];
+        if (Auth::check()) {
+            $bookmarks = \App\Models\ComicBookmark::where('user_id', Auth::id())
+                ->where('comic_id', $comic->id)
+                ->orderBy('page_number')
+                ->get(['id', 'page_number', 'note', 'created_at']);
+        }
+
         return Inertia::render('Comics/Show', [
             'comic' => $comic,
             'last_read_page' => $lastReadPage,
+            'personal_shelves' => $personalShelves,
+            'bookmarks' => $bookmarks,
         ]);
+    }
+
+    public function addToPersonalShelf(Request $request, Comic $comic)
+    {
+        $request->validate([
+            'shelf_id' => 'required|exists:shelves,id',
+        ]);
+
+        $shelf = Shelf::findOrFail($request->shelf_id);
+
+        if ($shelf->user_id !== Auth::id()) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $comic->shelves()->syncWithoutDetaching([$shelf->id]);
+
+        return back()->with('success', 'Added to shelf: ' . $shelf->name);
+    }
+
+    public function addBookmark(Request $request, Comic $comic)
+    {
+        $request->validate([
+            'page_number' => 'required|integer|min:1',
+            'note' => 'nullable|string|max:500',
+        ]);
+
+        $bookmark = \App\Models\ComicBookmark::updateOrCreate(
+            [
+                'user_id' => Auth::id(),
+                'comic_id' => $comic->id,
+                'page_number' => $request->page_number,
+            ],
+            [
+                'note' => $request->note,
+            ]
+        );
+
+        return response()->json([
+            'bookmark' => $bookmark->only(['id', 'page_number', 'note', 'created_at']),
+        ]);
+    }
+
+    public function removeBookmark(Comic $comic, \App\Models\ComicBookmark $bookmark)
+    {
+        if ($bookmark->user_id !== Auth::id() || $bookmark->comic_id !== $comic->id) {
+            abort(403);
+        }
+
+        $bookmark->delete();
+
+        return response()->json(['success' => true]);
     }
 
     public function serve($id)
@@ -318,8 +450,8 @@ class ComicController extends Controller
 
         return Inertia::render('Admin/Comics/Index', [
             'comics'     => $comics,
-            'shelves'    => Shelf::whereNull('parent_id')->with(['children' => fn($q) => $q->withCount('comics')])->withCount('comics')->orderBy('sort_order')->get(),
-            'categories' => Category::orderBy('sort_order')->get(),
+            'shelves'    => Shelf::whereNull('parent_id')->with(['children' => fn($q) => $q->withCount('comics')])->withCount('comics')->orderBy('name')->get(),
+            'categories' => Category::orderBy('name')->get(),
             'users'      => User::orderBy('name')->get(['id', 'name', 'email']),
             'roles'      => \Spatie\Permission\Models\Role::orderBy('name')->get(['id', 'name']),
             'filters'    => [

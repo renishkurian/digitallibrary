@@ -24,6 +24,9 @@ class Comic extends Model
         'rating',
         'tags',
         'md5_hash',
+        'published_date',
+        'file_size',
+        'pages_count',
         'visual_hash', // ADD this column via migration: string, nullable
     ];
 
@@ -36,6 +39,7 @@ class Comic extends Model
         'is_approved' => 'boolean',
         'tags' => 'array',
         'rating' => 'float',
+        'published_date' => 'date',
     ];
 
     public function getHashIdAttribute()
@@ -103,37 +107,49 @@ class Comic extends Model
 
     public function scopeVisible($query, $user = null)
     {
-        if (!$user) {
-            return $query->where('is_hidden', false)
-                ->where('is_personal', false)
-                ->where('is_approved', true);
-        }
+        $user = $user ?? auth()->user();
 
-        if ($user->hasRole('admin')) {
+        if ($user && $user->hasRole('admin')) {
             return $query;
         }
 
         return $query->where(function ($q) use ($user) {
-            $q->where(function ($sq) {
+            // Standard visibility
+            $q->where(function ($sq) use ($user) {
                 $sq->where('is_hidden', false)
                     ->where('is_personal', false)
                     ->where('is_approved', true);
-            })
-                ->orWhere('user_id', $user->id)
-                ->orWhereHas('sharedWith', function ($sq) use ($user) {
-                    $sq->where('users.id', $user->id);
-                })
-                ->orWhereHas('sharedRoles', function ($sq) use ($user) {
-                    $sq->whereIn('roles.id', $user->roles->pluck('id'));
-                })
-                ->orWhereHas('categories', function ($sq) use ($user) {
-                    $sq->whereHas('sharedUsers', function ($ssq) use ($user) {
-                        $ssq->where('users.id', $user->id);
-                    })
-                        ->orWhereHas('sharedRoles', function ($ssq) use ($user) {
-                            $ssq->whereIn('roles.id', $user->roles->pluck('id'));
+
+                // Shelf privacy: Must not be ONLY in hidden shelves
+                $sq->where(function ($ssq) use ($user) {
+                    $ssq->whereDoesntHave('shelves')
+                        ->orWhereHas('shelves', function ($sssq) use ($user) {
+                            $sssq->visible($user);
                         });
                 });
+            });
+
+            if ($user) {
+                // Owner visibility
+                $q->orWhere('user_id', $user->id)
+                    // Direct sharing
+                    ->orWhereHas('sharedWith', function ($sq) use ($user) {
+                        $sq->where('users.id', $user->id);
+                    })
+                    // Role sharing
+                    ->orWhereHas('sharedRoles', function ($sq) use ($user) {
+                        $sq->whereIn('roles.id', $user->roles->pluck('id'));
+                    })
+                    // Category sharing
+                    ->orWhereHas('categories', function ($sq) use ($user) {
+                        $sq->whereHas('sharedUsers', function ($ssq) use ($user) {
+                            $ssq->where('users.id', $user->id);
+                        })
+                            ->orWhereHas('sharedRoles', function ($ssq) use ($user) {
+                                $ssq->whereIn('roles.id', $user->roles->pluck('id'));
+                            });
+                    });
+            }
         });
     }
 
@@ -221,7 +237,7 @@ class Comic extends Model
     public static function getPageCount($path): ?int
     {
         exec(
-            "pdfinfo " . escapeshellarg($path) . " 2>/dev/null | grep -i '^Pages:' | awk '{print $2}'",
+            "pdfinfo " . escapeshellarg($path) . " 2>/dev/null | grep -a -i '^Pages:' | awk '{print $2}'",
             $out,
             $code
         );
@@ -289,5 +305,83 @@ class Comic extends Model
         }
 
         return false;
+    }
+
+    /**
+     * Parse date from filename or title.
+     * Supports:
+     * - Month Day Year (April 12 2024, 20 February 2021)
+     * - Year Month Day (2018 9 21, 2023-06-28)
+     * - Day Month Year (29.06.2023, 13/04/2024)
+     * - Month Year (april 2024)
+     */
+    public static function parseDateFromFilename($string): ?\Carbon\Carbon
+    {
+        if (empty($string)) return null;
+
+        // Clean up string: replace underscores, dashes, dots with spaces
+        $clean = preg_replace('/[._\/-]/', ' ', $string);
+        $clean = preg_replace('/\s+/', ' ', $clean);
+        $clean = trim($clean);
+
+        // 1. Full matches with month names
+        $months = 'January|February|March|April|May|June|July|August|Auguest|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec';
+
+        // Month Day Year or Day Month Year
+        if (preg_match('/(?:(' . $months . ')\s+(\d{1,2})|(\d{1,2})\s+(' . $months . '))\s+(\d{4})/i', $clean, $matches)) {
+            $month = !empty($matches[1]) ? $matches[1] : $matches[4];
+            $day = !empty($matches[2]) ? $matches[2] : $matches[3];
+            $year = $matches[5];
+
+            // Normalize month name for Carbon
+            if (stripos($month, 'Augu') === 0) $month = 'August';
+            if (stripos($month, 'Sept') === 0) $month = 'September';
+
+            try {
+                return \Carbon\Carbon::parse("$month $day $year");
+            } catch (\Exception $e) {
+            }
+        }
+
+        // Year Month Day (numeric or with month name)
+        if (preg_match('/(\d{4})\s+(' . $months . '|\d{1,2})\s+(\d{1,2})/i', $clean, $matches)) {
+            $year = $matches[1];
+            $month = $matches[2];
+            $day = $matches[3];
+
+            if (!is_numeric($month)) {
+                if (stripos($month, 'Augu') === 0) $month = 'August';
+                if (stripos($month, 'Sept') === 0) $month = 'September';
+            }
+
+            try {
+                return \Carbon\Carbon::parse("$year-$month-$day");
+            } catch (\Exception $e) {
+            }
+        }
+
+        // 2. Numeric patterns (D M Y or M D Y)
+        if (preg_match('/(\d{1,2})\s+(\d{1,2})\s+(\d{4})/', $clean, $matches)) {
+            try {
+                // Try D-M-Y first
+                return \Carbon\Carbon::createFromFormat('d m Y', $matches[1] . ' ' . $matches[2] . ' ' . $matches[3])->startOfDay();
+            } catch (\Exception $e) {
+                try {
+                    // Try M-D-Y
+                    return \Carbon\Carbon::createFromFormat('m d Y', $matches[1] . ' ' . $matches[2] . ' ' . $matches[3])->startOfDay();
+                } catch (\Exception $ee) {
+                }
+            }
+        }
+
+        // 3. Month Year only
+        if (preg_match('/(' . $months . ')\s+(\d{4})/i', $clean, $matches)) {
+            try {
+                return \Carbon\Carbon::parse($matches[0])->startOfMonth();
+            } catch (\Exception $e) {
+            }
+        }
+
+        return null;
     }
 }

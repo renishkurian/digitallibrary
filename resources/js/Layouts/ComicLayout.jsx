@@ -51,6 +51,7 @@ export default function ComicLayout({ children, title }) {
                     <nav className="hidden md:flex items-center gap-6 ml-4">
                         <Link href={route('comics.index')} className={`text-[13px] tracking-widest uppercase font-medium transition-colors ${route().current('comics.index') ? 'text-[#e8003d]' : 'text-[#8888a0] hover:text-white'}`}>Library</Link>
                         <Link href={route('shelves.index')} className={`text-[13px] tracking-widest uppercase font-medium transition-colors ${route().current('shelves.*') ? 'text-[#e8003d]' : 'text-[#8888a0] hover:text-white'}`}>Shelves</Link>
+                        <Link href={route('comics.calendar')} className={`text-[13px] tracking-widest uppercase font-medium transition-colors ${route().current('comics.calendar') ? 'text-[#e8003d]' : 'text-[#8888a0] hover:text-white'}`}>Calendar</Link>
                         {auth.user && (
                             <Link href={route('reading-stats')} className={`text-[13px] tracking-widest uppercase font-medium transition-colors ${route().current('reading-stats') ? 'text-[#e8003d]' : 'text-[#8888a0] hover:text-white'}`}>Stats</Link>
                         )}
@@ -138,6 +139,7 @@ export default function ComicLayout({ children, title }) {
                         {/* Nav links */}
                         <Link href={route('comics.index')} onClick={() => setMobileMenuOpen(false)} className={`text-[14px] tracking-widest uppercase font-medium py-2.5 px-3 rounded-lg transition-colors ${route().current('comics.index') ? 'text-[#e8003d] bg-[#e8003d]/10' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}>Library</Link>
                         <Link href={route('shelves.index')} onClick={() => setMobileMenuOpen(false)} className={`text-[14px] tracking-widest uppercase font-medium py-2.5 px-3 rounded-lg transition-colors ${route().current('shelves.*') ? 'text-[#e8003d] bg-[#e8003d]/10' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}>Shelves</Link>
+                        <Link href={route('comics.calendar')} onClick={() => setMobileMenuOpen(false)} className={`text-[14px] tracking-widest uppercase font-medium py-2.5 px-3 rounded-lg transition-colors ${route().current('comics.calendar') ? 'text-[#e8003d] bg-[#e8003d]/10' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}>Calendar</Link>
                         {auth.user && (
                             <Link href={route('reading-stats')} onClick={() => setMobileMenuOpen(false)} className={`text-[14px] tracking-widest uppercase font-medium py-2.5 px-3 rounded-lg transition-colors ${route().current('reading-stats') ? 'text-[#e8003d] bg-[#e8003d]/10' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}>Stats</Link>
                         )}

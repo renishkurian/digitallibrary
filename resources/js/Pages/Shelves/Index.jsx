@@ -25,7 +25,7 @@ export default function Index({ shelves }) {
                                 <div className="aspect-[16/9] w-full bg-[#0d0d14] relative overflow-hidden">
                                     {shelf.cover_image ? (
                                         <img 
-                                            src={`/shelves/${shelf.cover_image}`} 
+                                            src={shelf.cover_image} 
                                             alt={shelf.name} 
                                             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                                         />

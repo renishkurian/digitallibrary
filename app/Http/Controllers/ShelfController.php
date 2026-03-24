@@ -15,19 +15,19 @@ class ShelfController extends Controller
             ->whereNull('parent_id')
             ->withCount('comics')
             ->with(['children' => fn($q) => $q->visible(Auth::user())->withCount('comics')])
-            ->orderBy('sort_order')
+            ->orderBy('name')
             ->get();
 
         return Inertia::render('Shelves/Index', [
             'shelves' => $shelves->map(fn($s) => [
                 'id' => $s->hash_id,
-                'name' => $s->name,
+                'name' => ucfirst(str_replace('_', ' ', $s->name)),
                 'description' => $s->description,
-                'cover_image' => $s->cover_image,
+                'cover_image' => $s->display_cover_image,
                 'comics_count' => $s->aggregate_comics_count,
                 'children' => $s->children->map(fn($c) => [
                     'id' => $c->hash_id,
-                    'name' => $c->name,
+                    'name' => ucfirst(str_replace('_', ' ', $c->name)),
                     'comics_count' => $c->aggregate_comics_count,
                 ])
             ]),
@@ -62,19 +62,19 @@ class ShelfController extends Controller
         return Inertia::render('Shelves/Show', [
             'shelf' => [
                 'id' => $shelf->hash_id,
-                'name' => $shelf->name,
+                'name' => ucfirst(str_replace('_', ' ', $shelf->name)),
                 'description' => $shelf->description,
                 'aggregate_count' => $shelf->aggregate_comics_count,
                 'parent' => $shelf->parent ? [
                     'id' => $shelf->parent->hash_id,
-                    'name' => $shelf->parent->name
+                    'name' => ucfirst(str_replace('_', ' ', $shelf->parent->name))
                 ] : null
             ],
             'children' => $shelf->children->map(fn($c) => [
                 'id' => $c->hash_id,
-                'name' => $c->name,
+                'name' => ucfirst(str_replace('_', ' ', $c->name)),
                 'description' => $c->description,
-                'cover_image' => $c->cover_image,
+                'cover_image' => $c->display_cover_image,
                 'comics_count' => $c->aggregate_comics_count,
             ]),
             'comics' => $comics->through(fn($c) => [
@@ -92,7 +92,7 @@ class ShelfController extends Controller
 
     public function adminIndex()
     {
-        $allShelves = Shelf::with(['user', 'parent'])->orderBy('sort_order')->get();
+        $allShelves = Shelf::with(['user', 'parent'])->orderBy('name')->get();
 
         // Build a hierarchical list
         $shelves = [];
@@ -100,7 +100,7 @@ class ShelfController extends Controller
 
         $flatten = function ($items, $prefix = '') use (&$flatten, &$shelves, $allShelves) {
             foreach ($items as $item) {
-                $item->display_name = $prefix . $item->name;
+                $item->display_name = $prefix . ucfirst(str_replace('_', ' ', $item->name));
                 $shelves[] = $item;
                 $children = $allShelves->where('parent_id', $item->id);
                 if ($children->count() > 0) {
