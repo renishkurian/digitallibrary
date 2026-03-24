@@ -158,7 +158,7 @@ class ComicController extends Controller
                     'share_url' => $comic->share_url,
                     'rating' => $comic->rating,
                     'tags' => $comic->tags,
-                    'published_date' => $comic->published_date ? $comic->published_date->format('F Y') : null,
+                    'published_date' => $comic->published_date ? $comic->published_date->format('Y-m-d') : null,
                 ];
             });
 

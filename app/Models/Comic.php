@@ -333,13 +333,13 @@ class Comic extends Model
     {
         if (empty($string)) return null;
 
-        // Clean up string: replace underscores, dashes, dots with spaces
-        $clean = preg_replace('/[._\/-]/', ' ', $string);
+        // Clean up string: replace underscores, dashes, dots, and COMMAS with spaces
+        $clean = preg_replace('/[._\/,\-]/', ' ', $string);
         $clean = preg_replace('/\s+/', ' ', $clean);
         $clean = trim($clean);
 
-        // 1. Full matches with month names
-        $months = 'January|February|March|April|May|June|July|August|Auguest|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec';
+        // 1. Full matches with month names (using word boundaries to avoid partial matches)
+        $months = '\b(?:January|February|March|April|May|June|July|August|Auguest|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\b';
 
         // Month Day Year or Day Month Year
         if (preg_match('/(?:(' . $months . ')\s+(\d{1,2})|(\d{1,2})\s+(' . $months . '))\s+(\d{4})/i', $clean, $matches)) {

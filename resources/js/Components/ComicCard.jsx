@@ -17,7 +17,9 @@ export default function ComicCard({ comic, auth, compact = false }) {
 
     const formatComicTitle = (comic) => {
         if (comic.published_date) {
-            const date = new Date(comic.published_date);
+            // Using split and local Date constructor to avoid UTC shift issues with "YYYY-MM-DD" strings
+            const [year, month, day] = comic.published_date.split('-').map(Number);
+            const date = new Date(year, month - 1, day);
             return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
         }
         return toTitleCase(comic.title, true);
