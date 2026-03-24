@@ -10,9 +10,17 @@ export default function ComicCard({ comic, auth, compact = false }) {
         if (!str) return '';
         let clean = str.replace(/\.pdf$/i, '');
         if (stripMagazine) {
-            clean = clean.replace(/balarama/gi, '').trim();
+            clean = clean.replace(/balarama|balabhumi|kalakaumudi|fire|mangalam|mathrubhumi|manorama|arogyamasika|fasttrack|tell me why|vanitha/gi, '').trim();
         }
         return clean.replace(/[_-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase()).replace(/\s+/g, ' ').trim();
+    };
+
+    const formatComicTitle = (comic) => {
+        if (comic.published_date) {
+            const date = new Date(comic.published_date);
+            return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        }
+        return toTitleCase(comic.title, true);
     };
 
     const formatSize = (bytes) => {
@@ -33,7 +41,7 @@ export default function ComicCard({ comic, auth, compact = false }) {
                 <Link href={route('comics.show', comic.id)} className="flex items-center gap-4 bg-[#16161f] border border-white/7 rounded-xl p-3 hover:bg-white/[0.05] hover:border-[#e8003d]/40 transition-all group-hover:-translate-y-0.5">
                     <div className="flex-1 min-w-0">
                         <h3 className="text-white font-bold group-hover:text-[#e8003d] transition-colors truncate text-sm flex items-center gap-2">
-                            {toTitleCase(comic.title, true)}
+                            {formatComicTitle(comic)}
                             {comic.is_personal && <span className="text-[9px] bg-blue-500/10 text-blue-400 px-1 py-0.5 rounded border border-blue-500/20 uppercase shrink-0">Personal</span>}
                         </h3>
                         {(() => {
@@ -94,7 +102,7 @@ export default function ComicCard({ comic, auth, compact = false }) {
                         <div className="card-overlay absolute inset-0 bg-gradient-to-t from-[#0a0a0f]/95 via-transparent to-transparent flex flex-col justify-end p-[15px]">
                             <div className="flex-1 min-w-0">
                                 <h3 className="text-white font-bold group-hover/card:text-[#e8003d] transition-colors leading-tight truncate px-1 flex items-center gap-2 bg-black/40 backdrop-blur-sm py-1 rounded-lg">
-                                    <span className="truncate">{toTitleCase(comic.title, true)}</span>
+                                    <span className="truncate">{formatComicTitle(comic)}</span>
                                     {comic.is_personal && <span className="text-[9px] bg-blue-500/10 text-blue-400 px-1 py-0.5 rounded border border-blue-500/20 uppercase tracking-tighter shrink-0">Personal</span>}
                                 </h3>
                                 {(() => {
