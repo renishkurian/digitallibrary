@@ -36,21 +36,12 @@ export default function Duplicates({ auth, paginatedData, filters }) {
         getSearch(route('admin.duplicates.index'));
     };
 
-    const confirmDelete = (comic) => {
+    const bulkTrash = () => {
+        if (selectedIds.length === 0) return;
         setConfirmConfig({
             isOpen: true,
-            title: 'Delete Duplicate File',
-            message: `Are you sure you want to delete "${comic.title}"? This will physically remove the PDF from storage and cannot be undone.`,
-            comicId: comic.id,
-            type: 'single'
-        });
-    };
-
-    const confirmBulkDelete = () => {
-        setConfirmConfig({
-            isOpen: true,
-            title: 'Bulk Delete Duplicates',
-            message: `Are you sure you want to delete ${selectedIds.length} selected files? This will physically remove them from storage and cannot be undone.`,
+            title: 'Move to Trash',
+            message: `Move ${selectedIds.length} selected files to Trash? They can be restored later from the Trash tab.`,
             comicId: null,
             type: 'bulk'
         });
@@ -58,7 +49,7 @@ export default function Duplicates({ auth, paginatedData, filters }) {
 
     const handleDelete = () => {
         if (confirmConfig.type === 'bulk') {
-            router.post(route('admin.duplicates.bulk-delete'), { ids: selectedIds }, {
+            router.post(route('admin.duplicates.bulk-trash'), { ids: selectedIds }, {
                 preserveScroll: true,
                 onSuccess: () => {
                     setConfirmConfig(prev => ({ ...prev, isOpen: false }));
@@ -66,7 +57,7 @@ export default function Duplicates({ auth, paginatedData, filters }) {
                 }
             });
         } else {
-            router.delete(route('admin.duplicates.destroy', confirmConfig.comicId), {
+            router.post(route('admin.duplicates.trash', confirmConfig.comicId), {}, {
                 preserveScroll: true,
                 onSuccess: () => setConfirmConfig(prev => ({ ...prev, isOpen: false }))
             });
@@ -92,10 +83,15 @@ export default function Duplicates({ auth, paginatedData, filters }) {
 
     // Pre-select all non-suggested (i.e. the ones to delete) across all groups
     const selectAllDuplicates = () => {
-        const toDelete = paginatedData.data.flatMap(group =>
-            group.items.filter(item => item.id !== group.suggested_keep_id).map(item => item.id)
-        );
-        setSelectedIds(toDelete);
+        const toDeleteForG = (g) => g.items.filter(i => i.id !== g.suggested_keep_id).map(i => i.id);
+        const allToDelete = duplicates.flatMap(toDeleteForG);
+        const allAlreadySelected = allToDelete.length > 0 && allToDelete.every(id => selectedIds.includes(id));
+
+        if (allAlreadySelected) {
+            setSelectedIds(prev => prev.filter(id => !allToDelete.includes(id)));
+        } else {
+            setSelectedIds(prev => [...new Set([...prev, ...allToDelete])]);
+        }
     };
 
     const duplicates = paginatedData.data;
@@ -136,6 +132,12 @@ export default function Duplicates({ auth, paginatedData, filters }) {
                             </button>
                         </form>
                         <Link
+                            href={route('admin.comics.index', { approval: 'trash' })}
+                            className="bg-[#e8003d]/10 border border-[#e8003d]/20 text-[#e8003d] px-5 py-2 rounded-lg text-xs uppercase tracking-widest font-bold hover:bg-[#e8003d]/20 transition-colors"
+                        >
+                            View Trash
+                        </Link>
+                        <Link
                             href={route('admin.comics.index')}
                             className="bg-white/5 border border-white/10 text-white px-5 py-2 rounded-lg text-xs uppercase tracking-widest font-bold hover:bg-white/10 transition-colors"
                         >
@@ -163,15 +165,24 @@ export default function Duplicates({ auth, paginatedData, filters }) {
                                 <span className="font-bold text-blue-400">Note:</span> Duplicates are identified by visual content — same pages, regardless of compression or filename.{' '}
                                 <span className="text-green-400 font-bold">Green = suggested keep</span> (smallest/compressed file).
                             </p>
-                            <div className="flex items-center gap-4 shrink-0">
-                                <button
-                                    onClick={selectAllDuplicates}
-                                    className="text-[10px] font-black uppercase tracking-widest text-[#e8003d] hover:text-white transition-colors whitespace-nowrap"
-                                >
-                                    Select All Duplicates
-                                </button>
+                            <div className="flex items-center gap-6 shrink-0 bg-black/20 px-4 py-2 rounded-xl border border-white/5">
+                                <label className="flex items-center gap-3 cursor-pointer group">
+                                    <input
+                                        type="checkbox"
+                                        className="w-5 h-5 rounded-lg border-white/40 bg-white/5 text-[#e8003d] focus:ring-[#e8003d] transition-all cursor-pointer"
+                                        checked={duplicates.length > 0 && duplicates.every(group => 
+                                            group.items.filter(item => item.id !== group.suggested_keep_id)
+                                                .every(item => selectedIds.includes(item.id))
+                                        )}
+                                        onChange={selectAllDuplicates}
+                                    />
+                                    <span className="text-[11px] font-black uppercase tracking-widest text-white group-hover:text-[#e8003d] transition-colors">
+                                        Select All Duplicates
+                                    </span>
+                                </label>
+                                <div className="w-px h-4 bg-white/10" />
                                 <span className="text-[10px] font-black uppercase tracking-widest text-[#a0a0b8]">
-                                    Found {paginatedData.meta.total} Group{paginatedData.meta.total > 1 ? 's' : ''}
+                                    {paginatedData.meta.total} Groups Found
                                 </span>
                             </div>
                         </div>
@@ -197,7 +208,7 @@ export default function Duplicates({ auth, paginatedData, filters }) {
                                     <div className="flex items-center gap-4">
                                         <input
                                             type="checkbox"
-                                            className="w-4 h-4 rounded border-white/20 bg-white/5 text-[#e8003d] focus:ring-[#e8003d] transition-all cursor-pointer"
+                                            className="w-5 h-5 rounded-lg border-white/40 bg-white/10 text-[#e8003d] focus:ring-[#e8003d] transition-all cursor-pointer"
                                             checked={group.items.every(item => selectedIds.includes(item.id))}
                                             onChange={() => toggleGroupSelect(group.items)}
                                         />
@@ -222,7 +233,7 @@ export default function Duplicates({ auth, paginatedData, filters }) {
                                                         <td className="px-6 py-4 w-4">
                                                             <input
                                                                 type="checkbox"
-                                                                className="w-4 h-4 rounded border-white/20 bg-white/5 text-[#e8003d] focus:ring-[#e8003d] transition-all cursor-pointer"
+                                                                className="w-5 h-5 rounded-lg border-white/40 bg-white/10 text-[#e8003d] focus:ring-[#e8003d] transition-all cursor-pointer"
                                                                 checked={selectedIds.includes(comic.id)}
                                                                 onChange={() => toggleSelect(comic.id)}
                                                             />
@@ -265,11 +276,19 @@ export default function Duplicates({ auth, paginatedData, filters }) {
                                                             <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
                                                                 {!isSuggested && (
                                                                     <button
-                                                                        onClick={() => confirmDelete(comic)}
-                                                                        className="text-[10px] font-black uppercase tracking-widest text-[#8888a0] hover:text-[#e8003d] transition-colors"
-                                                                        title="Delete this duplicate file permanently"
+                                                                        onClick={() => {
+                                                                            setConfirmConfig({
+                                                                                isOpen: true,
+                                                                                title: 'Move to Trash',
+                                                                                message: 'Move this duplicate to Trash? It can be restored later.',
+                                                                                comicId: comic.id,
+                                                                                type: 'single'
+                                                                            });
+                                                                        }}
+                                                                        className="text-[#64748b] hover:text-[#e8003d] transition-colors p-2"
+                                                                        title="Move to Trash"
                                                                     >
-                                                                        Delete
+                                                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                                                                     </button>
                                                                 )}
                                                                 <Link
@@ -325,11 +344,11 @@ export default function Duplicates({ auth, paginatedData, filters }) {
                                 Cancel
                             </button>
                             <button
-                                onClick={confirmBulkDelete}
+                                onClick={bulkTrash}
                                 className="bg-[#e8003d] hover:bg-[#ff0044] text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-[#e8003d]/20 transition-all flex items-center gap-2"
                             >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"/></svg>
-                                Delete Selected
+                                Move to Trash ({selectedIds.length})
                             </button>
                         </div>
                     </div>
@@ -342,7 +361,7 @@ export default function Duplicates({ auth, paginatedData, filters }) {
                 message={confirmConfig.message}
                 onConfirm={handleDelete}
                 onCancel={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
-                confirmText="Delete PDF"
+                confirmText={confirmConfig.type === 'bulk' ? 'Move Selected to Trash' : 'Move to Trash'}
                 confirmStyle="danger"
             />
         </ComicLayout>

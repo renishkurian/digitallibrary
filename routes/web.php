@@ -7,6 +7,7 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\RolePermissionController;
+use App\Http\Controllers\Admin\DuplicateController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -104,9 +105,11 @@ Route::middleware('auth')->group(function () {
         Route::post('/ai-playground/query', [App\Http\Controllers\Admin\AiPlaygroundController::class, 'query'])->name('ai-playground.query');
 
         // Duplicates
-        Route::get('/duplicates', [App\Http\Controllers\Admin\DuplicateController::class, 'index'])->name('duplicates.index');
-        Route::post('/duplicates/bulk-delete', [App\Http\Controllers\Admin\DuplicateController::class, 'bulkDestroy'])->name('duplicates.bulk-delete');
-        Route::delete('/duplicates/{comic}', [App\Http\Controllers\Admin\DuplicateController::class, 'destroy'])->name('duplicates.destroy');
+        Route::get('/duplicates', [DuplicateController::class, 'index'])->name('duplicates.index');
+        Route::post('/duplicates/bulk-trash', [DuplicateController::class, 'bulkMoveToTrash'])->name('duplicates.bulk-trash');
+        Route::delete('/duplicates/bulk-delete', [DuplicateController::class, 'bulkDestroy'])->name('duplicates.bulk-delete');
+        Route::post('/duplicates/{comic}/trash', [DuplicateController::class, 'moveToTrash'])->name('duplicates.trash');
+        Route::delete('/duplicates/{comic}', [DuplicateController::class, 'destroy'])->name('duplicates.destroy');
 
         // Logs
         Route::get('/logs', [App\Http\Controllers\Admin\LogController::class, 'index'])->name('logs.index');

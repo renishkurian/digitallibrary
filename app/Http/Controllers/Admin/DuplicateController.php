@@ -115,6 +115,23 @@ class DuplicateController extends Controller
         ]);
     }
 
+    public function moveToTrash(Comic $comic)
+    {
+        $comic->delete();
+        return back()->with('success', 'Comic moved to Trash.');
+    }
+
+    public function bulkMoveToTrash(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:comics,id',
+        ]);
+
+        Comic::whereIn('id', $request->ids)->delete();
+        return back()->with('success', count($request->ids) . ' comics moved to Trash.');
+    }
+
     public function destroy(Comic $comic)
     {
         $baseDir  = config('comics.base_dir');
