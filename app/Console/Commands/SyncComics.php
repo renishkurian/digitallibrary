@@ -28,8 +28,9 @@ class SyncComics extends Command
     private array $shelfPivotSet = [];   // "comicId:shelfId"    => true
 
     // --- Batch accumulators -------------------------------------------------
-    private array $toSave        = [];   // Comic models pending save
-    private array $toDispatchAI  = [];   // Comic IDs pending AI job
+    private array $toSave          = [];   // Comic models pending save
+    private array $toSyncShelves   = [];   // Comic models and shelf IDs pending pivot sync
+    private array $toDispatchAI    = [];   // Comic IDs pending AI job
     private array $toDispatchThumb = []; // Comic models pending thumbnail job
 
     private const SAVE_CHUNK    = 50;
@@ -161,7 +162,7 @@ class SyncComics extends Command
 
                 if (!$isNew) {
                     // -- Genuinely new -----------------------------------------
-                    $comic             = new Comic(['path' => $relativePath]);
+                    $comic             = new Comic(['path' => $relativePath, 'is_approved' => true]);
                     $comic->visual_hash = $visualHash;
                     $comic->md5_hash    = $partialHash;
 
@@ -219,17 +220,21 @@ class SyncComics extends Command
             }
 
             // -- Persist ---------------------------------------------------
-            if ($comic->isDirty()) {
+            if ($comic->isDirty() || $isNew) {
                 if (!$dryRun) {
                     $this->toSave[] = ['comic' => $comic, 'isNew' => $isNew, 'aiEnabled' => $aiEnabled];
+
+                    // Always collect shelf ID if we have one, even if comic doesn't exist yet
+                    if ($deepestShelfId) {
+                        $this->toSyncShelves[] = ['comic' => $comic, 'shelfId' => $deepestShelfId];
+                    }
+
                     $this->flushSavesBatch(false);
                 }
                 if ($isNew) $counts['new']++;
                 else $counts['updated']++;
-            }
-
-            // -- Shelf pivot -----------------------------------------------
-            if ($deepestShelfId && $comic->exists && !$dryRun) {
+            } else if ($deepestShelfId && !$dryRun) {
+                // Not dirty, but might need shelf sync
                 $pivotKey = $comic->id . ':' . $deepestShelfId;
                 if (!isset($this->shelfPivotSet[$pivotKey])) {
                     $comic->shelves()->syncWithoutDetaching([$deepestShelfId]);
@@ -238,7 +243,7 @@ class SyncComics extends Command
             }
 
             // -- Queue thumbnail generation if still missing ---------------
-            if (!$comic->thumbnail && $comic->exists && !$dryRun) {
+            if (!$comic->thumbnail && ($comic->exists || $isNew) && !$dryRun) {
                 $this->toDispatchThumb[] = $comic;
             }
 
@@ -375,6 +380,15 @@ class SyncComics extends Command
                     $this->toDispatchAI[] = $comic->id;
                 }
             }
+
+            // Now that comics have IDs, we can sync shelves
+            foreach ($this->toSyncShelves as ['comic' => $comic, 'shelfId' => $shelfId]) {
+                $pivotKey = $comic->id . ':' . $shelfId;
+                if (!isset($this->shelfPivotSet[$pivotKey])) {
+                    $comic->shelves()->syncWithoutDetaching([$shelfId]);
+                    $this->shelfPivotSet[$pivotKey] = true;
+                }
+            }
         });
 
         // Dispatch AI jobs outside the transaction
@@ -382,8 +396,9 @@ class SyncComics extends Command
             ProcessComicAIJob::dispatch($id);
         }
 
-        $this->toSave       = [];
-        $this->toDispatchAI = [];
+        $this->toSave        = [];
+        $this->toSyncShelves = [];
+        $this->toDispatchAI  = [];
     }
 
     // -----------------------------------------------------------------------

@@ -105,12 +105,27 @@ export default function Calendar({ comicsByDate, month, year, auth }) {
                             <ChevronLeft className="w-5 h-5" />
                         </button>
                         
-                        <button 
-                            onClick={handleToday}
-                            className="btn btn-sm btn-ghost px-4 font-bold min-w-[150px]"
-                        >
-                            {monthNames[currentMonth - 1]} {currentYear}
-                        </button>
+                        <div className="flex items-center gap-1 group">
+                            <select 
+                                value={currentMonth}
+                                onChange={(e) => router.get(route('comics.calendar'), { month: e.target.value, year: currentYear }, { preserveScroll: true })}
+                                className="bg-transparent border-none text-white font-black uppercase tracking-widest text-xs focus:ring-0 cursor-pointer hover:text-[#e8003d] transition-colors appearance-none pr-1"
+                            >
+                                {monthNames.map((name, i) => (
+                                    <option key={name} value={i + 1} className="bg-[#16161f] text-white">{name}</option>
+                                ))}
+                            </select>
+                            <span className="text-white/20 font-light mx-1">/</span>
+                            <select 
+                                value={currentYear}
+                                onChange={(e) => router.get(route('comics.calendar'), { month: currentMonth, year: e.target.value }, { preserveScroll: true })}
+                                className="bg-transparent border-none text-white font-black uppercase tracking-widest text-xs focus:ring-0 cursor-pointer hover:text-[#e8003d] transition-colors appearance-none"
+                            >
+                                {Array.from({ length: (new Date().getFullYear() + 2) - 2015 + 1 }, (_, i) => 2015 + i).map(year => (
+                                    <option key={year} value={year} className="bg-[#16161f] text-white">{year}</option>
+                                ))}
+                            </select>
+                        </div>
                         
                         <button 
                             onClick={handleNextMonth}
@@ -130,8 +145,17 @@ export default function Calendar({ comicsByDate, month, year, auth }) {
                     ))}
                 </div>
 
-                <div className="grid grid-cols-7 gap-2 lg:gap-3">
+                <div className="grid grid-cols-7 gap-2 lg:gap-3 mb-12">
                     {renderDays()}
+                </div>
+
+                <div className="flex justify-center">
+                    <button 
+                        onClick={handleToday}
+                        className="bg-white/5 border border-white/10 text-white px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#e8003d] hover:border-[#e8003d] transition-all"
+                    >
+                        Back to Today
+                    </button>
                 </div>
             </div>
         </ComicLayout>
