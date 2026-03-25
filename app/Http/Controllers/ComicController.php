@@ -207,15 +207,16 @@ class ComicController extends Controller
             $query->visible();
         }
 
-        $comics = $query->whereYear('created_at', $year)
-            ->whereMonth('created_at', $month)
+        $comics = $query->whereNotNull('published_date')
+            ->whereYear('published_date', $year)
+            ->whereMonth('published_date', $month)
             ->get()
             ->map(function ($comic) {
                 return [
                     'id' => $comic->hash_id,
                     'title' => $comic->title,
                     'thumbnail' => $comic->thumbnail,
-                    'date' => $comic->created_at->format('Y-m-d'),
+                    'date' => $comic->published_date->format('Y-m-d'),
                 ];
             })
             ->groupBy('date');
