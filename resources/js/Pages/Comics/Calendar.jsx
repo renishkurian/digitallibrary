@@ -125,7 +125,7 @@ export default function Calendar({ comicsByDate, month, year, auth }) {
                                     onChange={(e) => router.get(route('comics.calendar'), { month: currentMonth, year: e.target.value }, { preserveScroll: true })}
                                     className="bg-white/5 border border-white/10 hover:border-[#e8003d] text-white font-black uppercase tracking-widest text-[10px] rounded-lg px-3 py-1.5 focus:ring-0 cursor-pointer transition-all appearance-none pr-8"
                                 >
-                                    {Array.from({ length: (new Date().getFullYear() + 2) - 2015 + 1 }, (_, i) => 2015 + i).map(year => (
+                                    {Array.from({ length: (new Date().getFullYear() + 2) - 1950 + 1 }, (_, i) => 1950 + i).map(year => (
                                         <option key={year} value={year} className="bg-[#16161f] text-white">{year}</option>
                                     ))}
                                 </select>
