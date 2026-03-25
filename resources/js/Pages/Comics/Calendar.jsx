@@ -105,26 +105,32 @@ export default function Calendar({ comicsByDate, month, year, auth }) {
                             <ChevronLeft className="w-5 h-5" />
                         </button>
                         
-                        <div className="flex items-center gap-1 group">
-                            <select 
-                                value={currentMonth}
-                                onChange={(e) => router.get(route('comics.calendar'), { month: e.target.value, year: currentYear }, { preserveScroll: true })}
-                                className="bg-transparent border-none text-white font-black uppercase tracking-widest text-xs focus:ring-0 cursor-pointer hover:text-[#e8003d] transition-colors appearance-none pr-1"
-                            >
-                                {monthNames.map((name, i) => (
-                                    <option key={name} value={i + 1} className="bg-[#16161f] text-white">{name}</option>
-                                ))}
-                            </select>
-                            <span className="text-white/20 font-light mx-1">/</span>
-                            <select 
-                                value={currentYear}
-                                onChange={(e) => router.get(route('comics.calendar'), { month: currentMonth, year: e.target.value }, { preserveScroll: true })}
-                                className="bg-transparent border-none text-white font-black uppercase tracking-widest text-xs focus:ring-0 cursor-pointer hover:text-[#e8003d] transition-colors appearance-none"
-                            >
-                                {Array.from({ length: (new Date().getFullYear() + 2) - 2015 + 1 }, (_, i) => 2015 + i).map(year => (
-                                    <option key={year} value={year} className="bg-[#16161f] text-white">{year}</option>
-                                ))}
-                            </select>
+                        <div className="flex items-center gap-1">
+                            <div className="relative group/select">
+                                <select 
+                                    value={currentMonth}
+                                    onChange={(e) => router.get(route('comics.calendar'), { month: e.target.value, year: currentYear }, { preserveScroll: true })}
+                                    className="bg-white/5 border border-white/10 hover:border-[#e8003d] text-white font-black uppercase tracking-widest text-[10px] rounded-lg px-3 py-1.5 focus:ring-0 cursor-pointer transition-all appearance-none pr-8"
+                                >
+                                    {monthNames.map((name, i) => (
+                                        <option key={name} value={i + 1} className="bg-[#16161f] text-white">{name}</option>
+                                    ))}
+                                </select>
+                                <ChevronLeft className="w-3 h-3 text-white/30 absolute right-2 top-1/2 -translate-y-1/2 -rotate-90 pointer-events-none group-hover/select:text-[#e8003d]" />
+                            </div>
+
+                            <div className="relative group/select">
+                                <select 
+                                    value={currentYear}
+                                    onChange={(e) => router.get(route('comics.calendar'), { month: currentMonth, year: e.target.value }, { preserveScroll: true })}
+                                    className="bg-white/5 border border-white/10 hover:border-[#e8003d] text-white font-black uppercase tracking-widest text-[10px] rounded-lg px-3 py-1.5 focus:ring-0 cursor-pointer transition-all appearance-none pr-8"
+                                >
+                                    {Array.from({ length: (new Date().getFullYear() + 2) - 2015 + 1 }, (_, i) => 2015 + i).map(year => (
+                                        <option key={year} value={year} className="bg-[#16161f] text-white">{year}</option>
+                                    ))}
+                                </select>
+                                <ChevronLeft className="w-3 h-3 text-white/30 absolute right-2 top-1/2 -translate-y-1/2 -rotate-90 pointer-events-none group-hover/select:text-[#e8003d]" />
+                            </div>
                         </div>
                         
                         <button 
