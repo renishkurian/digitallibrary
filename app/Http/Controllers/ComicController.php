@@ -97,6 +97,14 @@ class ComicController extends Controller
             });
         }
 
+        // Date Range Filter (published_date)
+        if ($request->filled('date_from')) {
+            $query->whereDate('published_date', '>=', $request->date_from);
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('published_date', '<=', $request->date_to);
+        }
+
         // My Library Filters (only for logged in users)
         if (Auth::check()) {
             $userId = Auth::id();
@@ -181,7 +189,7 @@ class ComicController extends Controller
         return Inertia::render('Comics/Index', [
             'comics' => $comics,
             'recentlyRead' => $recentlyRead,
-            'filters' => $request->only(['q', 'status', 'shelf', 'category', 'personal', 'shared', 'hidden']),
+            'filters' => $request->only(['q', 'status', 'shelf', 'category', 'personal', 'shared', 'hidden', 'date_from', 'date_to']),
             'shelves' => Shelf::visible(Auth::user())->whereNull('parent_id')->with(['children' => fn($q) => $q->visible(Auth::user())])->orderBy('name')->get()->map(fn($s) => [
                 'id' => $s->hash_id,
                 'name' => ucfirst(str_replace('_', ' ', $s->name)),

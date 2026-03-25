@@ -188,6 +188,38 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
                         </div>
                     </div>
 
+                    <div className="flex flex-col gap-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-[11px] tracking-[3px] uppercase font-black text-[#55556a]">Published Date</h3>
+                            {(filters.date_from || filters.date_to) && (
+                                <button 
+                                    onClick={() => router.get(route('comics.index', { ...filters, date_from: null, date_to: null }), {}, { preserveState: true })}
+                                    className="text-[9px] text-[#e8003d] hover:text-[#ff0044] font-bold uppercase tracking-wider transition-colors"
+                                >Clear</button>
+                            )}
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] text-[#55556a] uppercase tracking-wider font-bold">From</label>
+                                <input 
+                                    type="date" 
+                                    value={filters.date_from || ''} 
+                                    onChange={(e) => router.get(route('comics.index', { ...filters, date_from: e.target.value || null }), {}, { preserveState: true })}
+                                    className="bg-white/5 border border-white/10 text-white text-[12px] rounded-lg px-3 py-2 focus:ring-1 focus:ring-[#e8003d] focus:border-[#e8003d] hover:border-white/20 transition-all w-full [color-scheme:dark]"
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] text-[#55556a] uppercase tracking-wider font-bold">To</label>
+                                <input 
+                                    type="date" 
+                                    value={filters.date_to || ''} 
+                                    onChange={(e) => router.get(route('comics.index', { ...filters, date_to: e.target.value || null }), {}, { preserveState: true })}
+                                    className="bg-white/5 border border-white/10 text-white text-[12px] rounded-lg px-3 py-2 focus:ring-1 focus:ring-[#e8003d] focus:border-[#e8003d] hover:border-white/20 transition-all w-full [color-scheme:dark]"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
                     {auth.user && (
                         <div className="flex flex-col gap-4">
                             <h3 className="text-[11px] tracking-[3px] uppercase font-black text-[#55556a]">My Library</h3>
