@@ -3,7 +3,6 @@ import { Link, Head, router } from '@inertiajs/react';
 import ComicLayout from '@/Layouts/ComicLayout';
 import ComicCard from '@/Components/ComicCard';
 import Pagination from '@/Components/Pagination';
-import SpaceLibrary from '@/Components/SpaceLibrary';
 
 export default function Index({ comics, filters, auth, shelves, categories, recentlyRead }) {
     const [showSidebar, setShowSidebar] = useState(
@@ -85,18 +84,6 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
                             <line x1="3" y1="15" x2="21" y2="15"></line>
                             <line x1="9" y1="3" x2="9" y2="21"></line>
                             <line x1="15" y1="3" x2="15" y2="21"></line>
-                        </svg>
-                    </button>
-                    <button 
-                        onClick={() => setViewMode('space')}
-                        className={`p-2 rounded-lg transition-all ${viewMode === 'space' ? 'bg-[#e8003d] text-white shadow-lg' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}
-                        title="3D Space View (Anti-Gravity)"
-                    >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <circle cx="12" cy="12" r="4"></circle>
-                            <line x1="12" y1="2" x2="12" y2="22"></line>
-                            <line x1="2" y1="12" x2="22" y2="12"></line>
                         </svg>
                     </button>
                 </div>
@@ -396,9 +383,7 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
 
                 {/* Comic Grid */}
                 <div className="flex-1 transition-all duration-300 w-full min-w-0">
-                    {viewMode === 'space' ? (
-                        <SpaceLibrary comics={comics.data} onExit={() => setViewMode('grid')} />
-                    ) : comics.data.length === 0 ? (
+                    {comics.data.length === 0 ? (
                         <div className="text-center py-24 bg-white/[0.02] border border-white/5 rounded-3xl text-[#55556a]">
                             <svg className="w-16 h-16 mx-auto mb-4 opacity-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
