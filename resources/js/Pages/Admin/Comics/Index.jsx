@@ -298,8 +298,9 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                                 </span>
                             )}
                             <button onClick={runSync} disabled={syncProcessing || syncStatus.status === 'running'}
-                                className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-white/10 text-[#888] hover:text-white hover:border-white/20 transition-all disabled:opacity-40">
-                                ⟳ Sync
+                                className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-white/10 text-[#888] hover:text-white hover:border-white/20 transition-all disabled:opacity-40"
+                                title="Scan system for new comics and duplicates">
+                                ⟳ Ingress
                             </button>
                             <button onClick={() => setUploadPanelOpen(p => !p)}
                                 className="text-[11px] font-bold uppercase tracking-wider px-4 py-1.5 rounded-lg border transition-all"
@@ -354,6 +355,22 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                                     {uploading ? 'Uploading…' : 'Upload'}
                                 </button>
                             </form>
+                        </div>
+                    )}
+
+                    {/* Sync Progress Bar */}
+                    {syncStatus.status === 'running' && (
+                        <div className="px-6 py-4 bg-blue-500/5 border-b border-white/5 animate-in slide-in-from-top-2 duration-300">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-blue-400">System Scan in Progress</span>
+                                <span className="text-[10px] font-black text-blue-400">Updating library...</span>
+                            </div>
+                            <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-500 rounded-full transition-all duration-500 animate-pulse w-full" />
+                            </div>
+                            <p className="text-[10px] text-[#64748b] mt-2 italic px-1">
+                                {syncStatus.progress || 'Scanning filesystem for new and duplicate comics...'}
+                            </p>
                         </div>
                     )}
 

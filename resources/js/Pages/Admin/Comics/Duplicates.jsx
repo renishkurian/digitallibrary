@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Head, Link, useForm, router } from '@inertiajs/react';
 import ComicLayout from '@/Layouts/ComicLayout';
 import Pagination from '@/Components/Pagination';
@@ -8,9 +8,27 @@ export default function Duplicates({ auth, paginatedData, filters }) {
     const [searchQuery, setSearchQuery] = useState(filters.q || '');
     const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', comicId: null, type: 'single' });
     const [selectedIds, setSelectedIds] = useState([]);
+    const [syncStatus, setSyncStatus]   = useState({ status: 'idle', progress: '', error: null, last_sync_at: null });
+
+    useEffect(() => {
+        let interval;
+        const check = () => fetch(route('admin.comics.sync-status')).then(r => r.json()).then(d => {
+            setSyncStatus(d);
+            if (d.status !== 'running') clearInterval(interval);
+        });
+        if (syncStatus.status === 'running') interval = setInterval(check, 3000);
+        else check();
+        return () => clearInterval(interval);
+    }, [syncStatus.status]);
 
     const { data: searchData, setData, get: getSearch } = useForm({
         q: filters.q || '',
+    });
+
+    const { post: syncPost, processing: syncProcessing } = useForm();
+
+    const runSync = () => syncPost(route('admin.comics.sync'), {
+        onSuccess: () => setSyncStatus(p => ({ ...p, status: 'running' }))
     });
 
     const handleSearch = (e) => {
@@ -92,6 +110,19 @@ export default function Duplicates({ auth, paginatedData, filters }) {
                         Duplicate <span className="text-[#e8003d]">Detection</span>
                     </h2>
                     <div className="flex gap-4 items-center">
+                        {syncStatus.status === 'running' && (
+                            <span className="text-[11px] text-blue-400 font-bold uppercase tracking-wider animate-pulse">
+                                ⟳ {syncStatus.progress || 'Scanning...'}
+                            </span>
+                        )}
+                        <button 
+                            onClick={runSync} 
+                            disabled={syncProcessing || syncStatus.status === 'running'}
+                            className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-white/10 text-[#888] hover:text-white hover:border-white/20 transition-all disabled:opacity-40"
+                            title="Scan system for new comics and duplicates"
+                        >
+                            ⟳ Ingress
+                        </button>
                         <form onSubmit={handleSearch} className="relative w-[300px]">
                             <input
                                 type="text"
@@ -144,6 +175,21 @@ export default function Duplicates({ auth, paginatedData, filters }) {
                                 </span>
                             </div>
                         </div>
+
+                        {syncStatus.status === 'running' && (
+                            <div className="bg-blue-500/5 border border-blue-500/10 rounded-xl p-4 animate-in slide-in-from-top-2 duration-300">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-blue-400">System Scan in Progress</span>
+                                    <span className="text-[10px] font-black text-blue-400">Updating library...</span>
+                                </div>
+                                <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                                    <div className="h-full bg-blue-500 rounded-full transition-all duration-500 animate-pulse w-full" />
+                                </div>
+                                <p className="text-[10px] text-[#64748b] mt-2 italic">
+                                    {syncStatus.progress || 'Scanning filesystem for new and duplicate comics...'}
+                                </p>
+                            </div>
+                        )}
 
                         {duplicates.map((group) => (
                             <div key={group.hash} className="bg-[#16161f] border border-white/7 rounded-2xl overflow-hidden shadow-xl animate-in fade-in duration-300">

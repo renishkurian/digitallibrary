@@ -119,38 +119,55 @@ class SyncComics extends Command
                 // -- Fast-path duplicate: partial MD5 ----------------------
                 $partialHash = Comic::getPartialHash($absolutePath);
                 if ($partialHash && $dup = $md5HashMap->get($partialHash)) {
-                    $this->warnOnce("Duplicate skipped (md5): $filename <- [{$dup->filename}]", $bar);
-                    $counts['skipped']++;
-                    $processedPaths[$relativePath] = true;
-                    $bar->advance();
-                    continue;
+                    $this->warnOnce("Duplicate recorded (md5): $filename <- [{$dup->filename}]", $bar);
+                    $comic = new Comic([
+                        'path'        => $relativePath,
+                        'is_approved' => false, // New duplicates are unapproved
+                        'is_hidden'   => true,    // New duplicates are hidden
+                    ]);
+                    $comic->md5_hash    = $partialHash;
+                    $comic->visual_hash = $dup->visual_hash;
+                    $comic->thumbnail   = $dup->thumbnail;
+                    $comic->pages_count = $dup->pages_count;
+                    $isNew = true;
                 }
 
-                // -- Slow-path duplicate: perceptual hash ------------------
-                $visualHash = null;
-                if (!$this->option('skip-visual-hash')) {
-                    $visualHash = Comic::getVisualHash($absolutePath);
-                    if ($visualHash) {
-                        $dup = $this->findSimilarHash($visualHash, $visualHashMap);
-                        if ($dup) {
-                            $this->warnOnce("Duplicate skipped (visual): $filename <- [{$dup->filename}]", $bar);
-                            $counts['skipped']++;
-                            $processedPaths[$relativePath] = true;
-                            $bar->advance();
-                            continue;
+                if (!$isNew) {
+                    // -- Slow-path duplicate: perceptual hash ------------------
+                    $visualHash = null;
+                    if (!$this->option('skip-visual-hash')) {
+                        $visualHash = Comic::getVisualHash($absolutePath);
+                        if ($visualHash) {
+                            $dup = $this->findSimilarHash($visualHash, $visualHashMap);
+                            if ($dup) {
+                                $this->warnOnce("Duplicate recorded (visual): $filename <- [{$dup->filename}]", $bar);
+                                $comic = new Comic([
+                                    'path'        => $relativePath,
+                                    'is_approved' => false,
+                                    'is_hidden'   => true,
+                                ]);
+                                $comic->visual_hash = $visualHash;
+                                $comic->md5_hash    = $partialHash;
+                                $comic->thumbnail   = $dup->thumbnail;
+                                $comic->pages_count = $dup->pages_count;
+                                $isNew = true;
+                            }
+                            if (!$isNew) {
+                                $visualHashMap->put($visualHash, new Comic(['filename' => $filename]));
+                            }
                         }
-                        $visualHashMap->put($visualHash, new Comic(['filename' => $filename]));
                     }
                 }
 
-                // -- Genuinely new -----------------------------------------
-                $comic             = new Comic(['path' => $relativePath]);
-                $comic->visual_hash = $visualHash;
-                $comic->md5_hash    = $partialHash;
+                if (!$isNew) {
+                    // -- Genuinely new -----------------------------------------
+                    $comic             = new Comic(['path' => $relativePath]);
+                    $comic->visual_hash = $visualHash;
+                    $comic->md5_hash    = $partialHash;
 
-                if ($partialHash) $md5HashMap->put($partialHash, $comic);
-
-                $isNew = true;
+                    if ($partialHash) $md5HashMap->put($partialHash, $comic);
+                    $isNew = true;
+                }
             } else {
                 // -- Restore soft-deleted comic if file reappeared ---------
                 if ($comic->trashed()) {
