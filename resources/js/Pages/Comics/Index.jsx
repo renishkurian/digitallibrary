@@ -285,7 +285,7 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
                                             </div>
                                             <div className="w-6 h-6 rounded overflow-hidden border border-white/10 shrink-0 bg-[#0d0d14]">
                                                 {shelf.cover_image ? (
-                                                    <img src={`/shelves/${shelf.cover_image}`} className="w-full h-full object-cover" alt="" />
+                                                    <img src={shelf.cover_image} className="w-full h-full object-cover" alt="" />
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center text-[8px] text-[#55556a] uppercase font-black">NA</div>
                                                 )}
