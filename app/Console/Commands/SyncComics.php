@@ -262,13 +262,6 @@ class SyncComics extends Command
         $bar->finish();
         $this->newLine();
 
-        // -- 5. Dispatch queued thumbnail jobs -----------------------------
-        if (!empty($this->toDispatchThumb) && !$dryRun) {
-            $this->info('Dispatching ' . count($this->toDispatchThumb) . ' thumbnail jobs...');
-            foreach ($this->toDispatchThumb as $comic) {
-                GenerateThumbnailJob::dispatch($comic);
-            }
-        }
 
         // -- 6. Soft-delete orphans ----------------------------------------
         $orphans = $existingComics->diffKeys($processedPaths)->filter(fn($c) => !$c->trashed());
@@ -404,9 +397,15 @@ class SyncComics extends Command
             ProcessComicAIJob::dispatch($id);
         }
 
+        // Dispatch Thumbnail jobs outside the transaction
+        foreach ($this->toDispatchThumb as $comic) {
+            GenerateThumbnailJob::dispatch($comic);
+        }
+
         $this->toSave        = [];
         $this->toSyncShelves = [];
         $this->toDispatchAI  = [];
+        $this->toDispatchThumb = [];
     }
 
     // -----------------------------------------------------------------------
