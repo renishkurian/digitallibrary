@@ -250,6 +250,10 @@ class SyncComics extends Command
             $processedPaths[$relativePath] = true;
             $counts['total']++;
             $bar->advance();
+
+            if ($counts['total'] % 20 === 0 && !$dryRun) {
+                Setting::set('sync_progress', "Processed {$counts['total']} of {$files->count()} files...");
+            }
         }
 
         // Flush remaining batch
@@ -290,6 +294,10 @@ class SyncComics extends Command
         ));
 
         if (!$dryRun) {
+            Setting::set('sync_status', 'idle');
+            Setting::set('sync_progress', "Last sync completed successfully at " . now()->toDateTimeString());
+            Setting::set('last_sync_at', now()->toDateTimeString());
+
             LoggingService::info('Comic library sync completed', array_merge(
                 $counts,
                 ['duration_seconds' => $duration, 'base_dir' => $baseDir]

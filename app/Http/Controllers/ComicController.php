@@ -676,6 +676,9 @@ class ComicController extends Controller
             return back()->with('error', 'Sync is already in progress.');
         }
 
+        \App\Models\Setting::set('sync_status', 'running');
+        \App\Models\Setting::set('sync_progress', 'Queued for background processing...');
+
         \App\Jobs\SyncComicsJob::dispatch();
         return back()->with('success', 'Sync started in the background.');
     }
