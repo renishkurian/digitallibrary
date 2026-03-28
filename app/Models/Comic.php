@@ -301,7 +301,13 @@ class Comic extends Model
         $pdfPathEscaped = escapeshellarg($absolutePdfPath);
         $tempPrefixEscaped = escapeshellarg($tempPrefix);
 
-        $command = "pdftoppm -f 1 -l 1 -jpeg -scale-to 800 -jpegopt quality=80 " . $pdfPathEscaped . " " . $tempPrefixEscaped . " 2>&1";
+        // Use absolute path for pdftoppm to be safe in different environments
+        $pdftoppmPath = '/usr/bin/pdftoppm';
+        if (!file_exists($pdftoppmPath)) {
+            $pdftoppmPath = 'pdftoppm'; // Fallback to PATH
+        }
+
+        $command = "{$pdftoppmPath} -f 1 -l 1 -jpeg -scale-to 800 -jpegopt quality=80 " . $pdfPathEscaped . " " . $tempPrefixEscaped . " 2>&1";
         exec($command, $output, $returnVar);
 
         $generatedFiles = glob($tempPrefix . "-*.jpg");
@@ -317,6 +323,15 @@ class Comic extends Model
             }
             return true;
         }
+
+        // Log failure for debugging
+        \Illuminate\Support\Facades\Log::error("Thumbnail generation failed for comic ID {$this->id}", [
+            'command' => $command,
+            'return_var' => $returnVar,
+            'output' => $output,
+            'pdf_exists' => file_exists($absolutePdfPath),
+            'thumb_dir_writable' => is_writable($thumbDir),
+        ]);
 
         return false;
     }
