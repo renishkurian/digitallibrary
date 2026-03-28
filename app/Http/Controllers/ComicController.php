@@ -215,6 +215,17 @@ class ComicController extends Controller
             $query->visible();
         }
 
+        $shelfId = $request->input('shelf');
+        if ($shelfId) {
+            $shelf = Shelf::findByHashId($shelfId);
+            if ($shelf) {
+                $allShelfIds = array_merge([$shelf->id], $shelf->getDescendantIds());
+                $query->whereHas('shelves', function ($q) use ($allShelfIds) {
+                    $q->whereIn('shelves.id', $allShelfIds);
+                });
+            }
+        }
+
         $comics = $query->whereNotNull('published_date')
             ->whereYear('published_date', $year)
             ->whereMonth('published_date', $month)
@@ -231,8 +242,18 @@ class ComicController extends Controller
 
         return Inertia::render('Comics/Calendar', [
             'comicsByDate' => $comics,
-            'month' => $month,
-            'year' => $year,
+            'month'      => $month,
+            'year'       => $year,
+            'magazines'  => Shelf::visible()
+                ->whereNull('parent_id')
+                ->whereHas('comics')
+                ->orderBy('name')
+                ->get()
+                ->map(fn($s) => [
+                    'id'   => $s->hash_id,
+                    'name' => ucfirst(str_replace(['_', '-'], ' ', $s->name)),
+                ]),
+            'currentShelfId' => $shelfId,
         ]);
     }
 

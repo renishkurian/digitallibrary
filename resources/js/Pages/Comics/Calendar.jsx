@@ -3,7 +3,7 @@ import { Head, Link, router } from '@inertiajs/react';
 import ComicLayout from '@/Layouts/ComicLayout';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
 
-export default function Calendar({ comicsByDate, month, year, auth }) {
+export default function Calendar({ comicsByDate, month, year, auth, magazines, currentShelfId }) {
     const [currentMonth, setCurrentMonth] = useState(parseInt(month));
     const [currentYear, setCurrentYear] = useState(parseInt(year));
 
@@ -20,7 +20,7 @@ export default function Calendar({ comicsByDate, month, year, auth }) {
             newMonth = 12;
             newYear -= 1;
         }
-        router.get(route('comics.calendar'), { month: newMonth, year: newYear }, { preserveScroll: true });
+        router.get(route('comics.calendar'), { month: newMonth, year: newYear, shelf: currentShelfId }, { preserveScroll: true });
     };
 
     const handleNextMonth = () => {
@@ -30,12 +30,12 @@ export default function Calendar({ comicsByDate, month, year, auth }) {
             newMonth = 1;
             newYear += 1;
         }
-        router.get(route('comics.calendar'), { month: newMonth, year: newYear }, { preserveScroll: true });
+        router.get(route('comics.calendar'), { month: newMonth, year: newYear, shelf: currentShelfId }, { preserveScroll: true });
     };
 
     const handleToday = () => {
         const today = new Date();
-        router.get(route('comics.calendar'), { month: today.getMonth() + 1, year: today.getFullYear() }, { preserveScroll: true });
+        router.get(route('comics.calendar'), { month: today.getMonth() + 1, year: today.getFullYear(), shelf: currentShelfId }, { preserveScroll: true });
     };
 
     const renderDays = () => {
@@ -96,50 +96,67 @@ export default function Calendar({ comicsByDate, month, year, auth }) {
                         <p className="text-base-content/70 mt-1">Discover comics by the date they were added</p>
                     </div>
 
-                    <div className="flex items-center gap-2 bg-base-200 p-1 rounded-xl shadow-sm border border-base-300">
-                        <button 
-                            onClick={handlePreviousMonth}
-                            className="btn btn-sm btn-ghost btn-square"
-                            aria-label="Previous month"
-                        >
-                            <ChevronLeft className="w-5 h-5" />
-                        </button>
-                        
-                        <div className="flex items-center gap-1">
-                            <div className="relative group/select">
-                                <select 
-                                    value={currentMonth}
-                                    onChange={(e) => router.get(route('comics.calendar'), { month: e.target.value, year: currentYear }, { preserveScroll: true })}
-                                    className="bg-white/5 border border-white/10 hover:border-[#e8003d] text-white font-black uppercase tracking-widest text-[10px] rounded-lg px-3 py-1.5 focus:ring-0 cursor-pointer transition-all appearance-none pr-8"
-                                >
-                                    {monthNames.map((name, i) => (
-                                        <option key={name} value={i + 1} className="bg-[#16161f] text-white">{name}</option>
-                                    ))}
-                                </select>
-                                <ChevronLeft className="w-3 h-3 text-white/30 absolute right-2 top-1/2 -translate-y-1/2 -rotate-90 pointer-events-none group-hover/select:text-[#e8003d]" />
-                            </div>
-
-                            <div className="relative group/select">
-                                <select 
-                                    value={currentYear}
-                                    onChange={(e) => router.get(route('comics.calendar'), { month: currentMonth, year: e.target.value }, { preserveScroll: true })}
-                                    className="bg-white/5 border border-white/10 hover:border-[#e8003d] text-white font-black uppercase tracking-widest text-[10px] rounded-lg px-3 py-1.5 focus:ring-0 cursor-pointer transition-all appearance-none pr-8"
-                                >
-                                    {Array.from({ length: (new Date().getFullYear() + 2) - 1950 + 1 }, (_, i) => 1950 + i).map(year => (
-                                        <option key={year} value={year} className="bg-[#16161f] text-white">{year}</option>
-                                    ))}
-                                </select>
-                                <ChevronLeft className="w-3 h-3 text-white/30 absolute right-2 top-1/2 -translate-y-1/2 -rotate-90 pointer-events-none group-hover/select:text-[#e8003d]" />
-                            </div>
+                    <div className="flex flex-wrap items-center gap-4">
+                        {/* Magazine Filter */}
+                        <div className="relative group/select">
+                            <select 
+                                value={currentShelfId || ''}
+                                onChange={(e) => router.get(route('comics.calendar'), { month: currentMonth, year: currentYear, shelf: e.target.value }, { preserveScroll: true })}
+                                className="bg-white/5 border border-white/10 hover:border-[#e8003d] text-white font-black uppercase tracking-widest text-[10px] rounded-lg px-4 py-2.5 focus:ring-0 cursor-pointer transition-all appearance-none pr-10 min-w-[200px]"
+                            >
+                                <option value="" className="bg-[#16161f] text-white">All Magazines</option>
+                                {magazines.map((mag) => (
+                                    <option key={mag.id} value={mag.id} className="bg-[#16161f] text-white">{mag.name}</option>
+                                ))}
+                            </select>
+                            <ChevronLeft className="w-3 h-3 text-white/30 absolute right-3 top-1/2 -translate-y-1/2 -rotate-90 pointer-events-none group-hover/select:text-[#e8003d]" />
                         </div>
-                        
-                        <button 
-                            onClick={handleNextMonth}
-                            className="btn btn-sm btn-ghost btn-square"
-                            aria-label="Next month"
-                        >
-                            <ChevronRight className="w-5 h-5" />
-                        </button>
+
+                        <div className="flex items-center gap-2 bg-base-200 p-1 rounded-xl shadow-sm border border-base-300">
+                            <button 
+                                onClick={handlePreviousMonth}
+                                className="btn btn-sm btn-ghost btn-square"
+                                aria-label="Previous month"
+                            >
+                                <ChevronLeft className="w-5 h-5" />
+                            </button>
+                            
+                            <div className="flex items-center gap-1">
+                                <div className="relative group/select">
+                                    <select 
+                                        value={currentMonth}
+                                        onChange={(e) => router.get(route('comics.calendar'), { month: e.target.value, year: currentYear, shelf: currentShelfId }, { preserveScroll: true })}
+                                        className="bg-white/5 border border-white/10 hover:border-[#e8003d] text-white font-black uppercase tracking-widest text-[10px] rounded-lg px-3 py-1.5 focus:ring-0 cursor-pointer transition-all appearance-none pr-8"
+                                    >
+                                        {monthNames.map((name, i) => (
+                                            <option key={name} value={i + 1} className="bg-[#16161f] text-white">{name}</option>
+                                        ))}
+                                    </select>
+                                    <ChevronLeft className="w-3 h-3 text-white/30 absolute right-2 top-1/2 -translate-y-1/2 -rotate-90 pointer-events-none group-hover/select:text-[#e8003d]" />
+                                </div>
+
+                                <div className="relative group/select">
+                                    <select 
+                                        value={currentYear}
+                                        onChange={(e) => router.get(route('comics.calendar'), { month: currentMonth, year: e.target.value, shelf: currentShelfId }, { preserveScroll: true })}
+                                        className="bg-white/5 border border-white/10 hover:border-[#e8003d] text-white font-black uppercase tracking-widest text-[10px] rounded-lg px-3 py-1.5 focus:ring-0 cursor-pointer transition-all appearance-none pr-8"
+                                    >
+                                        {Array.from({ length: (new Date().getFullYear() + 2) - 1950 + 1 }, (_, i) => 1950 + i).map(year => (
+                                            <option key={year} value={year} className="bg-[#16161f] text-white">{year}</option>
+                                        ))}
+                                    </select>
+                                    <ChevronLeft className="w-3 h-3 text-white/30 absolute right-2 top-1/2 -translate-y-1/2 -rotate-90 pointer-events-none group-hover/select:text-[#e8003d]" />
+                                </div>
+                            </div>
+                            
+                            <button 
+                                onClick={handleNextMonth}
+                                className="btn btn-sm btn-ghost btn-square"
+                                aria-label="Next month"
+                            >
+                                <ChevronRight className="w-5 h-5" />
+                            </button>
+                        </div>
                     </div>
                 </div>
 
