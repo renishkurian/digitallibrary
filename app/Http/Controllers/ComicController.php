@@ -463,6 +463,14 @@ class ComicController extends Controller
             $query->where('is_hidden', true);
         }
 
+        // Shelf filter
+        $shelfFilter = $request->get('shelf');
+        if ($shelfFilter) {
+            $query->whereHas('shelves', function ($q) use ($shelfFilter) {
+                $q->where('shelves.id', $shelfFilter);
+            });
+        }
+
         $comics = $query->paginate(28)->withQueryString()->through(fn($comic) => [
             'id'            => $comic->id,
             'title'         => $comic->title,
@@ -492,7 +500,8 @@ class ComicController extends Controller
             'filters'    => [
                 'visibility' => $visibility,
                 'approval' => $request->get('approval', 'all'),
-                'q' => $request->get('q', '')
+                'q' => $request->get('q', ''),
+                'shelf' => $request->get('shelf', ''),
             ],
         ]);
     }
@@ -897,5 +906,91 @@ class ComicController extends Controller
         }
 
         return back()->with('success', count($request->ids) . ' comics updated.');
+    }
+
+    public function rename(Request $request, Comic $comic)
+    {
+        $request->validate([
+            'new_filename' => [
+                'required',
+                'string',
+                'max:255',
+                'regex:/^[^\\\/?%*:|"<>]+\.pdf$/i'
+            ],
+            'update_title' => 'boolean'
+        ], [
+            'new_filename.regex' => 'The filename must be a valid PDF name and contain no illegal characters.'
+        ]);
+
+        $newFilename = $request->new_filename;
+        $baseDir = rtrim(config('comics.base_dir'), '/');
+        $oldPath = $baseDir . '/' . ltrim($comic->path, '/');
+
+        $pathParts = explode('/', ltrim($comic->path, '/'));
+        array_pop($pathParts);
+        $newRelativePath = (count($pathParts) > 0 ? implode('/', $pathParts) . '/' : '') . $newFilename;
+        $newAbsolutePath = $baseDir . '/' . $newRelativePath;
+
+        if (File::exists($newAbsolutePath)) {
+            return back()->with('error', 'A file with this name already exists in this folder.');
+        }
+
+        if (!File::exists($oldPath)) {
+            return back()->with('error', 'Original file not found on disk at ' . $oldPath);
+        }
+
+        try {
+            // Rename file on disk
+            File::move($oldPath, $newAbsolutePath);
+
+            // Update thumbnail if it exists
+            $oldThumb = $comic->thumbnail;
+            $newThumb = $oldThumb;
+            if ($oldThumb) {
+                $thumbDir = rtrim(config('comics.thumb_dir'), '/');
+                $oldThumbPath = $thumbDir . '/' . $oldThumb;
+
+                $oldFilenameNoExt = pathinfo($comic->filename, PATHINFO_FILENAME);
+                $newFilenameNoExt = pathinfo($newFilename, PATHINFO_FILENAME);
+
+                // If thumbnail name contained the old filename, try to rename it
+                if (str_contains($oldThumb, $oldFilenameNoExt)) {
+                    $newThumb = str_replace($oldFilenameNoExt, $newFilenameNoExt, $oldThumb);
+                    $newThumbPath = $thumbDir . '/' . $newThumb;
+
+                    if (File::exists($oldThumbPath) && !File::exists($newThumbPath)) {
+                        File::move($oldThumbPath, $newThumbPath);
+                    }
+                }
+            }
+
+            // Update database
+            $comic->update([
+                'filename' => $newFilename,
+                'path' => $newRelativePath,
+                'title' => $request->boolean('update_title') ? pathinfo($newFilename, PATHINFO_FILENAME) : $comic->title,
+                'thumbnail' => $newThumb,
+            ]);
+
+            return back()->with('success', "File renamed to {$newFilename} successfully.");
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Failed to rename comic {$comic->id}: " . $e->getMessage());
+            return back()->with('error', 'Failed to rename file: ' . $e->getMessage());
+        }
+    }
+
+    public function bulkToggleVisibility(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:comics,id',
+        ]);
+
+        $comics = Comic::whereIn('id', $request->ids)->get();
+        foreach ($comics as $comic) {
+            $comic->update(['is_hidden' => !$comic->is_hidden]);
+        }
+
+        return back()->with('success', count($request->ids) . ' comics visibility updated.');
     }
 }

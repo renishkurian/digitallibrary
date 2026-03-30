@@ -3,6 +3,7 @@ import { useForm, Head, Link, router } from '@inertiajs/react';
 import ComicLayout from '@/Layouts/ComicLayout';
 import Pagination from '@/Components/Pagination';
 import ConfirmModal from '@/Components/ConfirmModal';
+import SearchableSelect from '@/Components/SearchableSelect';
 
 // ─── tiny icon helpers ────────────────────────────────────────────────────────
 const Icon = ({ d, size = 14, stroke = 2.5 }) => (
@@ -109,6 +110,9 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
     const { data: editData, setData: setEditData, post: postUpdate, processing: updating, errors: editErrors, reset: resetEdit } = useForm({
         title: '', shelf_ids: [], category_ids: [], is_hidden: false, is_personal: false, is_approved: false, thumbnail: null
     });
+    const { data: renameData, setData: setRenameData, post: postRename, processing: renaming, errors: renameErrors, reset: resetRename } = useForm({
+        new_filename: '', update_title: false
+    });
     const { post: syncPost, processing: syncProcessing } = useForm();
 
     const submitUpload = (e) => {
@@ -123,11 +127,24 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
     const handleEdit = (comic) => {
         setEditingComic(comic);
         setEditData({ title: comic.title, shelf_ids: comic.shelves?.map(s => s.id) ?? [], category_ids: comic.categories.map(c => c.id), is_hidden: comic.is_hidden, is_personal: comic.is_personal, is_approved: comic.is_approved, thumbnail: null });
+        setRenameData({ new_filename: comic.filename || '', update_title: false });
     };
 
     const submitUpdate = (e) => {
         e.preventDefault();
         postUpdate(route('admin.comics.update', editingComic.id), { onSuccess: () => { setEditingComic(null); resetEdit(); } });
+    };
+
+    const submitRename = (e) => {
+        e.preventDefault();
+        postRename(route('admin.comics.rename', editingComic.id), {
+            preserveScroll: true,
+            onSuccess: () => {
+                // The backend will have updated the comic record, 
+                // and Inertia will re-fetch the page data.
+                resetRename();
+            }
+        });
     };
 
     const toggle = (field, id) => {
@@ -182,6 +199,11 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
         onConfirm: () => router.delete(route('admin.comics.bulk-force-delete'), { data: { ids: selectedIds }, preserveScroll: true, onSuccess: () => { setSelectedIds([]); closeConfirm(); } })
     });
 
+    const bulkToggleVisibility = () => requestConfirm({
+        title: 'Toggle Visibility', message: `Toggle visibility for ${selectedIds.length} selected comics?`, confirmText: 'Toggle', confirmStyle: 'primary',
+        onConfirm: () => router.post(route('admin.comics.bulk-visibility'), { ids: selectedIds }, { preserveScroll: true, onSuccess: () => { setSelectedIds([]); closeConfirm(); } })
+    });
+
     const handleBulkShelf = (action) => {
         if (!bulkShelfId) return;
         const shelfName = shelves.find(s => s.id == bulkShelfId)?.name;
@@ -196,6 +218,7 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
 
     const setVisibility     = (v) => router.get(route('admin.comics.index'), { ...filters, visibility: v, approval: 'all' }, { replace: true, preserveScroll: true });
     const setApprovalFilter = (a) => router.get(route('admin.comics.index'), { ...filters, approval: a, visibility: 'all' }, { replace: true, preserveScroll: true });
+    const setShelfFilter    = (s) => router.get(route('admin.comics.index'), { ...filters, shelf: s }, { replace: true, preserveScroll: true });
 
     const handleSearch = (e) => {
         e.preventDefault();
@@ -396,6 +419,17 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                             )}
                         </form>
 
+                        {/* Shelf Filter */}
+                        <div className="flex items-center gap-2">
+                            <SearchableSelect 
+                                value={filters.shelf || ''}
+                                options={shelves}
+                                onChange={setShelfFilter}
+                                placeholder="All Shelves"
+                                className="min-w-[180px]"
+                            />
+                        </div>
+
                         {/* Tab filters */}
                         <div className="flex items-center gap-0.5 bg-white/4 border border-white/8 rounded-lg p-0.5">
                             {TABS.map(tab => (
@@ -438,12 +472,19 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                                 className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-all">
                                 ✦ AI Tag
                             </button>
+                            <button onClick={bulkToggleVisibility}
+                                className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-[#3b82f6]/30 bg-[#3b82f6]/10 text-[#3b82f6] hover:bg-[#3b82f6]/20 transition-all flex items-center gap-1.5"
+                                title="Toggle Visibility">
+                                <EyeIcon /> Visibility
+                            </button>
                             <div className="w-px h-4 bg-white/10" />
-                            <select value={bulkShelfId} onChange={e => setBulkShelfId(e.target.value)}
-                                className="bg-black/30 border border-white/10 text-white text-[11px] rounded-lg px-3 py-1.5 outline-none focus:border-[#e8003d] transition-colors">
-                                <option value="">Shelf…</option>
-                                {shelves.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
+                            <SearchableSelect 
+                                value={bulkShelfId}
+                                options={shelves}
+                                onChange={setBulkShelfId}
+                                placeholder="Shelf…"
+                                className="min-w-[150px]"
+                            />
                             <button onClick={() => handleBulkShelf('add')} disabled={!bulkShelfId}
                                 className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-blue-500/25 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 disabled:opacity-30 transition-all">
                                 Add to Shelf
@@ -699,6 +740,44 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                                 <input type="file" onChange={e => setEditData('thumbnail', e.target.files[0])}
                                     className="text-xs text-[#8888a0] file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-white/8 file:text-white hover:file:bg-white/12" />
                                 {editErrors.thumbnail && <span className="text-[#e8003d] text-xs">{editErrors.thumbnail}</span>}
+                            </div>
+
+                            {/* Rename File Section */}
+                            <div className="md:col-span-2 mt-4 p-5 rounded-xl bg-[#e8003d]/5 border border-[#e8003d]/15 flex flex-col gap-4">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-[11px] font-black uppercase tracking-widest text-[#e8003d]">Dangerous Action: Rename PDF File</h3>
+                                    <span className="text-[9px] text-[#666688] font-mono italic">Renames file on disk and in DB</span>
+                                </div>
+                                
+                                <div className="flex gap-3">
+                                    <div className="flex-1 flex flex-col gap-1.5">
+                                        <input 
+                                            type="text" 
+                                            value={renameData.new_filename} 
+                                            onChange={e => setRenameData('new_filename', e.target.value)}
+                                            placeholder="new_filename.pdf"
+                                            className="bg-black/40 border border-white/10 text-white rounded-lg px-3 py-2 outline-none focus:border-[#e8003d]/60 transition-colors text-[13px]"
+                                        />
+                                        {renameErrors.new_filename && <span className="text-[#e8003d] text-[10px] font-bold">{renameErrors.new_filename}</span>}
+                                    </div>
+                                    <button 
+                                        type="button" 
+                                        onClick={submitRename}
+                                        disabled={renaming || !renameData.new_filename || renameData.new_filename === editingComic.filename}
+                                        className="px-5 py-2 rounded-lg font-bold text-[11px] uppercase tracking-wider text-white bg-[#e8003d] disabled:opacity-30 disabled:bg-[#888] transition-all whitespace-nowrap"
+                                    >
+                                        {renaming ? 'Renaming…' : 'Rename File'}
+                                    </button>
+                                </div>
+
+                                <label className="flex items-center gap-2.5 cursor-pointer self-start">
+                                    <Checkbox 
+                                        checked={renameData.update_title} 
+                                        onChange={() => setRenameData('update_title', !renameData.update_title)} 
+                                        color="#e8003d" 
+                                    />
+                                    <span className="text-[11px] text-[#8888a0] font-medium">Update comic title to match new filename</span>
+                                </label>
                             </div>
 
                             {/* Buttons */}
