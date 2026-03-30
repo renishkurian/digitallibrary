@@ -489,6 +489,14 @@ class ComicController extends Controller
             'rating'        => $comic->rating,
             'thumbnail'     => $comic->thumbnail,
             'tags'          => $comic->tags,
+            'filename'      => $comic->filename,
+            'author'        => $comic->author,
+            'series'        => $comic->series,
+            'series_index'  => $comic->series_index,
+            'publisher'     => $comic->publisher,
+            'description'   => $comic->description,
+            'language'      => $comic->language,
+            'isbn'          => $comic->isbn,
         ]);
 
         return Inertia::render('Admin/Comics/Index', [
@@ -1006,13 +1014,5 @@ class ComicController extends Controller
         }
 
         return back()->with('success', count($request->ids) . ' comics visibility updated.');
-    }
-
-    public function fetchCalibreMeta(Comic $comic)
-    {
-        if ($comic->extractCalibreMeta()) {
-            return back()->with('success', 'Metadata extracted from Calibre file.');
-        }
-        return back()->with('error', 'No Calibre metadata file found or extraction failed.');
     }
 }

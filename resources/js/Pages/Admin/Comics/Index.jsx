@@ -136,17 +136,6 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
         setRenameData({ new_filename: comic.filename || '', update_title: false });
     };
 
-    const fetchCalibreMeta = () => {
-        router.post(route('admin.comics.fetch-calibre-meta', editingComic.id), {}, {
-            preserveScroll: true,
-            onSuccess: (page) => {
-                // The page props usually contain the updated data if using direct lists, 
-                // but for simple feedback we rely on back() + session success.
-                // Re-syncing the form manually is safer if the modal is still open.
-            }
-        });
-    };
-
     const submitUpdate = (e) => {
         e.preventDefault();
         postUpdate(route('admin.comics.update', editingComic.id), { onSuccess: () => { setEditingComic(null); resetEdit(); } });
@@ -763,13 +752,6 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                             <div className="md:col-span-2 p-5 rounded-xl bg-white/3 border border-white/10 flex flex-col gap-4">
                                 <div className="flex items-center justify-between">
                                     <h3 className="text-[11px] font-black uppercase tracking-widest text-[#666688]">Extended Metadata</h3>
-                                    <button 
-                                        type="button" 
-                                        onClick={fetchCalibreMeta}
-                                        className="text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-purple-500/25 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-all flex items-center gap-1.5"
-                                    >
-                                        ✦ Fetch Calibre Meta
-                                    </button>
                                 </div>
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

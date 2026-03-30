@@ -204,12 +204,18 @@ class SyncComics extends Command
                 $comic->pages_count = Comic::getPageCount($absolutePath);
             }
 
-            // Published date from filename / title
+            // published date
             $publishedDate = Comic::parseDateFromFilename($filename)
                 ?? Comic::parseDateFromFilename($title);
             if ($publishedDate) {
                 $comic->published_date = $publishedDate;
             }
+
+            // Extract metadata from filename (Series, Author, Index)
+            $meta = $this->parseMetadataFromFilename($filename);
+            if (empty($comic->author)) $comic->author = $meta['author'];
+            if (empty($comic->series)) $comic->series = $meta['series'];
+            if (is_null($comic->series_index)) $comic->series_index = $meta['series_index'];
 
             // Thumbnail - verify existing, then search patterns, then queue generation
             if ($comic->thumbnail && !file_exists($thumbDir . '/' . $comic->thumbnail)) {
@@ -501,5 +507,46 @@ class SyncComics extends Command
         $bar->clear();
         $this->warn($message);
         $bar->display();
+    }
+
+    /**
+     * Algorithm to extract Series, Author, and Index from filename
+     */
+    protected function parseMetadataFromFilename($filename)
+    {
+        $clean = pathinfo($filename, PATHINFO_FILENAME);
+        // Replace underscores and dots (if they seem like separators) with spaces
+        $clean = str_replace('_', ' ', $clean);
+        // Remove common noisy characters
+        $clean = preg_replace('/[\[\]\(\)]/', ' ', $clean);
+        $clean = preg_replace('/\s+/', ' ', $clean);
+        $clean = trim($clean);
+
+        $metadata = [
+            'series'       => null,
+            'author'       => null,
+            'series_index' => null,
+        ];
+
+        // Try to find index (e.g. #001 or 001 at the end, or V01 etc)
+        // Look for #123 or 001 at the end
+        if (preg_match('/#\s*(\d+(\.\d+)?)/', $clean, $matches)) {
+            $metadata['series_index'] = (float)$matches[1];
+            $clean = trim(str_replace($matches[0], '', $clean));
+        } elseif (preg_match('/\s+(\d+(\.\d+)?)$/', $clean, $matches)) {
+            $metadata['series_index'] = (float)$matches[1];
+            $clean = trim(preg_replace('/\s+\d+(\.\d+)?$/', '', $clean));
+        }
+
+        // Split by '-' for Author vs Series
+        if (str_contains($clean, '-')) {
+            $parts = explode('-', $clean, 2);
+            $metadata['author'] = trim($parts[0]);
+            $metadata['series'] = trim($parts[1]);
+        } else {
+            $metadata['series'] = trim($clean);
+        }
+
+        return $metadata;
     }
 }
