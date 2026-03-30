@@ -108,7 +108,8 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
         comic: null, is_personal: false, generate_ai: true, thumbnail: null, shelf_ids: []
     });
     const { data: editData, setData: setEditData, post: postUpdate, processing: updating, errors: editErrors, reset: resetEdit } = useForm({
-        title: '', shelf_ids: [], category_ids: [], is_hidden: false, is_personal: false, is_approved: false, thumbnail: null
+        title: '', shelf_ids: [], category_ids: [], is_hidden: false, is_personal: false, is_approved: false, thumbnail: null,
+        author: '', series: '', series_index: '', publisher: '', description: '', language: '', isbn: ''
     });
     const { data: renameData, setData: setRenameData, post: postRename, processing: renaming, errors: renameErrors, reset: resetRename } = useForm({
         new_filename: '', update_title: false
@@ -126,8 +127,24 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
 
     const handleEdit = (comic) => {
         setEditingComic(comic);
-        setEditData({ title: comic.title, shelf_ids: comic.shelves?.map(s => s.id) ?? [], category_ids: comic.categories.map(c => c.id), is_hidden: comic.is_hidden, is_personal: comic.is_personal, is_approved: comic.is_approved, thumbnail: null });
+        setEditData({ 
+            title: comic.title, shelf_ids: comic.shelves?.map(s => s.id) ?? [], category_ids: comic.categories.map(c => c.id), 
+            is_hidden: comic.is_hidden, is_personal: comic.is_personal, is_approved: comic.is_approved, thumbnail: null,
+            author: comic.author || '', series: comic.series || '', series_index: comic.series_index || '', 
+            publisher: comic.publisher || '', description: comic.description || '', language: comic.language || '', isbn: comic.isbn || ''
+        });
         setRenameData({ new_filename: comic.filename || '', update_title: false });
+    };
+
+    const fetchCalibreMeta = () => {
+        router.post(route('admin.comics.fetch-calibre-meta', editingComic.id), {}, {
+            preserveScroll: true,
+            onSuccess: (page) => {
+                // The page props usually contain the updated data if using direct lists, 
+                // but for simple feedback we rely on back() + session success.
+                // Re-syncing the form manually is safer if the modal is still open.
+            }
+        });
     };
 
     const submitUpdate = (e) => {
@@ -740,6 +757,56 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                                 <input type="file" onChange={e => setEditData('thumbnail', e.target.files[0])}
                                     className="text-xs text-[#8888a0] file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-white/8 file:text-white hover:file:bg-white/12" />
                                 {editErrors.thumbnail && <span className="text-[#e8003d] text-xs">{editErrors.thumbnail}</span>}
+                            </div>
+
+                            {/* Metadata Section */}
+                            <div className="md:col-span-2 p-5 rounded-xl bg-white/3 border border-white/10 flex flex-col gap-4">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-[11px] font-black uppercase tracking-widest text-[#666688]">Extended Metadata</h3>
+                                    <button 
+                                        type="button" 
+                                        onClick={fetchCalibreMeta}
+                                        className="text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-purple-500/25 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-all flex items-center gap-1.5"
+                                    >
+                                        ✦ Fetch Calibre Meta
+                                    </button>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-[#44445a]">Author</label>
+                                        <input type="text" value={editData.author} onChange={e => setEditData('author', e.target.value)}
+                                            className="bg-black/40 border border-white/10 text-white rounded-lg px-3 py-2 outline-none focus:border-[#e8003d]/60 transition-colors text-[12px]" />
+                                    </div>
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-[#44445a]">Series</label>
+                                        <div className="flex gap-2">
+                                            <input type="text" value={editData.series} onChange={e => setEditData('series', e.target.value)} placeholder="Series Name"
+                                                className="flex-1 bg-black/40 border border-white/10 text-white rounded-lg px-3 py-2 outline-none focus:border-[#e8003d]/60 transition-colors text-[12px]" />
+                                            <input type="number" step="0.1" value={editData.series_index} onChange={e => setEditData('series_index', e.target.value)} placeholder="#"
+                                                className="w-16 bg-black/40 border border-white/10 text-white rounded-lg px-3 py-2 outline-none focus:border-[#e8003d]/60 transition-colors text-[12px]" />
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-[#44445a]">Publisher</label>
+                                        <input type="text" value={editData.publisher} onChange={e => setEditData('publisher', e.target.value)}
+                                            className="bg-black/40 border border-white/10 text-white rounded-lg px-3 py-2 outline-none focus:border-[#e8003d]/60 transition-colors text-[12px]" />
+                                    </div>
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-[#44445a]">Language / ISBN</label>
+                                        <div className="flex gap-2">
+                                            <input type="text" value={editData.language} onChange={e => setEditData('language', e.target.value)} placeholder="en"
+                                                className="w-16 bg-black/40 border border-white/10 text-white rounded-lg px-3 py-2 outline-none focus:border-[#e8003d]/60 transition-colors text-[12px]" />
+                                            <input type="text" value={editData.isbn} onChange={e => setEditData('isbn', e.target.value)} placeholder="ISBN"
+                                                className="flex-1 bg-black/40 border border-white/10 text-white rounded-lg px-3 py-2 outline-none focus:border-[#e8003d]/60 transition-colors text-[12px]" />
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col gap-1.5 md:col-span-2">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-[#44445a]">Description</label>
+                                        <textarea value={editData.description} onChange={e => setEditData('description', e.target.value)} rows={3}
+                                            className="bg-black/40 border border-white/10 text-white rounded-lg px-3 py-2 outline-none focus:border-[#e8003d]/60 transition-colors text-[12px] resize-none" />
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Rename File Section */}

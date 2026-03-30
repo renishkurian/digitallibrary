@@ -518,6 +518,13 @@ class ComicController extends Controller
             'is_personal' => 'required|boolean',
             'is_approved' => 'required|boolean',
             'thumbnail' => 'nullable|image|max:2048',
+            'author' => 'nullable|string|max:255',
+            'series' => 'nullable|string|max:255',
+            'series_index' => 'nullable|numeric',
+            'publisher' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
+            'language' => 'nullable|string|max:10',
+            'isbn' => 'nullable|string|max:20',
         ]);
 
         $data = [
@@ -525,6 +532,13 @@ class ComicController extends Controller
             'is_hidden' => $request->is_hidden,
             'is_personal' => $request->is_personal,
             'is_approved' => $request->is_approved,
+            'author' => $request->author,
+            'series' => $request->series,
+            'series_index' => $request->series_index,
+            'publisher' => $request->publisher,
+            'description' => $request->description,
+            'language' => $request->language,
+            'isbn' => $request->isbn,
         ];
 
         if ($request->hasFile('thumbnail')) {
@@ -992,5 +1006,13 @@ class ComicController extends Controller
         }
 
         return back()->with('success', count($request->ids) . ' comics visibility updated.');
+    }
+
+    public function fetchCalibreMeta(Comic $comic)
+    {
+        if ($comic->extractCalibreMeta()) {
+            return back()->with('success', 'Metadata extracted from Calibre file.');
+        }
+        return back()->with('error', 'No Calibre metadata file found or extraction failed.');
     }
 }

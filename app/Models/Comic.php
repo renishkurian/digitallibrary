@@ -29,7 +29,13 @@ class Comic extends Model
         'published_date',
         'file_size',
         'pages_count',
-        'visual_hash', // ADD this column via migration: string, nullable
+        'visual_hash',
+        'author',
+        'series',
+        'series_index',
+        'publisher',
+        'language',
+        'isbn',
     ];
 
     protected $appends = ['encrypted_id', 'share_url'];
@@ -42,6 +48,7 @@ class Comic extends Model
         'tags' => 'array',
         'rating' => 'float',
         'published_date' => 'date',
+        'series_index' => 'float',
     ];
 
     public function getRouteKey()
@@ -412,5 +419,52 @@ class Comic extends Model
         }
 
         return null;
+    }
+
+    /**
+     * Attempt to extract metadata from a sibling metadata.opf file (Calibre style)
+     */
+    public function extractCalibreMeta()
+    {
+        $baseDir = rtrim(config('comics.base_dir'), '/');
+        $absolutePdfPath = $baseDir . '/' . ltrim($this->path, '/');
+        $directory = dirname($absolutePdfPath);
+        $opfPath = $directory . '/metadata.opf';
+
+        if (!\Illuminate\Support\Facades\File::exists($opfPath)) {
+            return false;
+        }
+
+        try {
+            $xml = simplexml_load_file($opfPath);
+            if (!$xml) return false;
+
+            $metadata = $xml->metadata->children('dc', true);
+
+            $updates = [];
+
+            if (isset($metadata->title)) $updates['title'] = (string)$metadata->title;
+            if (isset($metadata->creator)) $updates['author'] = (string)$metadata->creator;
+            if (isset($metadata->description)) $updates['description'] = strip_tags((string)$metadata->description);
+            if (isset($metadata->publisher)) $updates['publisher'] = (string)$metadata->publisher;
+            if (isset($metadata->language)) $updates['language'] = (string)$metadata->language;
+
+            // Series info is in <meta> tags
+            foreach ($xml->metadata->meta as $meta) {
+                $name = (string)$meta['name'];
+                $content = (string)$meta['content'];
+                if ($name === 'calibre:series') $updates['series'] = $content;
+                if ($name === 'calibre:series_index') $updates['series_index'] = (float)$content;
+            }
+
+            if (!empty($updates)) {
+                $this->update($updates);
+                return true;
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Failed to extract Calibre meta for comic {$this->id}: " . $e->getMessage());
+        }
+
+        return false;
     }
 }
