@@ -937,7 +937,7 @@ class ComicController extends Controller
                 'required',
                 'string',
                 'max:255',
-                'regex:/^[^\\\/?%*:|"<>]+\.pdf$/i'
+                'regex:~^[^\\\\/?%*:|"<>]+\.pdf$~i'
             ],
             'update_title' => 'boolean'
         ], [
