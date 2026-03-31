@@ -123,7 +123,7 @@ class Shelf extends Model
 
         return $query->where(function ($q) use ($user) {
             // Admins see everything
-            if ($user && isset($user->is_admin) && $user->is_admin) {
+            if ($user && isset($user->is_admin) && ($user->is_admin || $user->hasRole('admin'))) {
                 return $q;
             }
 

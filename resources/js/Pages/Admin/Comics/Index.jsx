@@ -79,7 +79,7 @@ function ActionBtn({ onClick, title, children, variant = 'ghost' }) {
 }
 
 // ─── main component ───────────────────────────────────────────────────────────
-export default function Index({ comics, auth, shelves, categories, users, roles, filters }) {
+export default function Index({ comics, auth, shelves, categories, users, roles, filters, auto_edit_comic }) {
     const [editingComic, setEditingComic]   = useState(null);
     const [sharingComic, setSharingComic]   = useState(null);
     const [shareUserId, setShareUserId]     = useState('');
@@ -100,6 +100,14 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
         else check();
         return () => clearInterval(interval);
     }, [syncStatus.status]);
+
+    useEffect(() => {
+        if (auto_edit_comic) {
+            handleEdit(auto_edit_comic);
+            // Optional: Remove query string visually so reloading works properly
+            window.history.replaceState({}, '', route('admin.comics.index'));
+        }
+    }, [auto_edit_comic]);
 
     const requestConfirm = (opts) => setConfirmConfig({ ...opts, isOpen: true });
     const closeConfirm   = () => setConfirmConfig(p => ({ ...p, isOpen: false }));

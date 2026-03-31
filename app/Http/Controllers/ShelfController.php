@@ -39,7 +39,7 @@ class ShelfController extends Controller
 
         if (!$shelf) abort(404);
 
-        if ($shelf->is_hidden && (!Auth::check() || !Auth::user()->is_admin)) {
+        if ($shelf->is_hidden && (!Auth::check() || (!Auth::user()->is_admin && !Auth::user()->hasRole('admin')))) {
             abort(403);
         }
 

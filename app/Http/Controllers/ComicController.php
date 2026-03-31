@@ -21,7 +21,7 @@ class ComicController extends Controller
         $query = Comic::withCount('readers');
 
         // Guest vs User visibility
-        if (!Auth::check() || !Auth::user()->is_admin) {
+        if (!Auth::check() || (!Auth::user()->is_admin && !Auth::user()->hasRole('admin'))) {
             $query->visible();
         }
 
@@ -211,7 +211,7 @@ class ComicController extends Controller
         $year = $request->input('year', now()->year);
 
         $query = Comic::query();
-        if (!Auth::check() || !Auth::user()->is_admin) {
+        if (!Auth::check() || (!Auth::user()->is_admin && !Auth::user()->hasRole('admin'))) {
             $query->visible();
         }
 
@@ -471,7 +471,7 @@ class ComicController extends Controller
             });
         }
 
-        $comics = $query->paginate(28)->withQueryString()->through(fn($comic) => [
+        $formatComic = fn($comic) => [
             'id'            => $comic->id,
             'title'         => $comic->title,
             'path'          => $comic->path,
@@ -497,10 +497,26 @@ class ComicController extends Controller
             'description'   => $comic->description,
             'language'      => $comic->language,
             'isbn'          => $comic->isbn,
-        ]);
+        ];
+
+        $comics = $query->paginate(28)->withQueryString()->through($formatComic);
+
+        $autoEditComic = null;
+        if ($request->has('edit')) {
+            $editVal = $request->get('edit');
+            $editId = is_numeric($editVal) ? $editVal : Comic::findByHashId($editVal)?->id;
+
+            if ($editId) {
+                $foundComic = Comic::with('shelves', 'categories', 'sharedWith', 'uploader', 'sharedRoles')->find($editId);
+                if ($foundComic) {
+                    $autoEditComic = $formatComic($foundComic);
+                }
+            }
+        }
 
         return Inertia::render('Admin/Comics/Index', [
             'comics'     => $comics,
+            'auto_edit_comic' => $autoEditComic,
             'shelves'    => Shelf::whereNull('parent_id')->with(['children' => fn($q) => $q->withCount('comics')])->withCount('comics')->orderBy('name')->get(),
             'categories' => Category::orderBy('name')->get(),
             'users'      => User::orderBy('name')->get(['id', 'name', 'email']),
