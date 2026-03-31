@@ -1002,12 +1002,18 @@ class ComicController extends Controller
                 }
             }
 
+            $newTitle = $request->boolean('update_title') ? pathinfo($newFilename, PATHINFO_FILENAME) : $comic->title;
+            $publishedDate = Comic::parseDateFromFilename($newFilename)
+                ?? Comic::parseDateFromFilename($newTitle)
+                ?? $comic->published_date;
+
             // Update database
             $comic->update([
                 'filename' => $newFilename,
                 'path' => $newRelativePath,
-                'title' => $request->boolean('update_title') ? pathinfo($newFilename, PATHINFO_FILENAME) : $comic->title,
+                'title' => $newTitle,
                 'thumbnail' => $newThumb,
+                'published_date' => $publishedDate,
             ]);
 
             return back()->with('success', "File renamed to {$newFilename} successfully.");
