@@ -52,7 +52,6 @@ Route::middleware('auth')->group(function () {
         Route::post('/comics/bulk-restore', [ComicController::class, 'bulkRestore'])->name('comics.bulk-restore');
         Route::delete('/comics/bulk-force-delete', [ComicController::class, 'bulkForceDelete'])->name('comics.bulk-force-delete');
         Route::post('/comics/bulk-visibility', [ComicController::class, 'bulkToggleVisibility'])->name('comics.bulk-visibility');
-        Route::post('/comics/{comic}/toggle-visibility', [ComicController::class, 'toggleVisibility'])->name('comics.toggle-visibility');
         Route::post('/comics/upload', [ComicController::class, 'upload'])->name('comics.upload');
         Route::post('/comics/{comic}/regenerate-thumbnail', [ComicController::class, 'regenerateThumbnail'])->name('comics.regenerate-thumbnail');
         Route::post('/comics/{comic}/approve', [ComicController::class, 'approve'])->name('comics.approve');
