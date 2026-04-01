@@ -77,6 +77,7 @@ export default function ComicLayout({ children, title }) {
                     <div className="auth-links flex items-center gap-3">
                         {auth.user ? (
                             <>
+                                <a href={route('profile.edit')} className="auth-link text-[13px] text-[#8888a0] hover:text-white transition-colors">Profile</a>
                                 <a href={route('dashboard')} className="auth-link text-[13px] text-[#8888a0] hover:text-white transition-colors">Dashboard</a>
                                 {auth.user.is_admin && (
                                     <a href={route('admin.comics.index')} className="auth-link text-[13px] text-[#8888a0] hover:text-white transition-colors">Admin</a>
@@ -150,6 +151,7 @@ export default function ComicLayout({ children, title }) {
                         {/* Auth links */}
                         {auth.user ? (
                             <>
+                                <a href={route('profile.edit')} className="text-[14px] text-[#8888a0] hover:text-white py-2.5 px-3 rounded-lg transition-colors hover:bg-white/5">Profile</a>
                                 <a href={route('dashboard')} className="text-[14px] text-[#8888a0] hover:text-white py-2.5 px-3 rounded-lg transition-colors hover:bg-white/5">Dashboard</a>
                                 {auth.user.is_admin && (
                                     <a href={route('admin.comics.index')} className="text-[14px] text-[#8888a0] hover:text-white py-2.5 px-3 rounded-lg transition-colors hover:bg-white/5">Admin</a>

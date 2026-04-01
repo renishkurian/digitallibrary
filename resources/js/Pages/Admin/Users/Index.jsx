@@ -74,8 +74,8 @@ export default function Index({ users, roles, auth }) {
     const [editingUser, setEditingUser]   = useState(null);
     const [deleteTarget, setDeleteTarget] = useState(null);
 
-    const { data: editData, setData: setEditData, post: postEdit, processing: editing, reset: resetEdit } = useForm({
-        name: '', email: '',
+    const { data: editData, setData: setEditData, post: postEdit, processing: editing, reset: resetEdit, errors: editErrors } = useForm({
+        name: '', email: '', password: '', password_confirmation: '',
     });
 
     const { post: postRole, processing: rolePending } = useForm();
@@ -304,6 +304,30 @@ export default function Index({ users, roles, auth }) {
                                     className="bg-white/5 border-2 border-white/5 text-white rounded-[1.25rem] px-5 py-4 outline-none focus:border-[#e8003d] focus:bg-white/[0.08] transition-all duration-300 font-medium placeholder:text-[#3a3a4a]"
                                     placeholder="user@example.com"
                                 />
+                                {editErrors.email && <div className="text-[#e8003d] text-[10px] uppercase tracking-wider font-bold ml-1">{editErrors.email}</div>}
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="grid gap-3">
+                                    <label className="text-[10px] uppercase tracking-[3px] font-black text-[#55556a] ml-1">New Password (Optional)</label>
+                                    <input 
+                                        type="password" 
+                                        value={editData.password} 
+                                        onChange={e => setEditData('password', e.target.value)} 
+                                        className="bg-white/5 border-2 border-white/5 text-white rounded-[1.25rem] px-5 py-4 outline-none focus:border-[#e8003d] focus:bg-white/[0.08] transition-all duration-300 font-medium placeholder:text-[#3a3a4a]"
+                                        placeholder="••••••••"
+                                    />
+                                    {editErrors.password && <div className="text-[#e8003d] text-[10px] uppercase tracking-wider font-bold ml-1">{editErrors.password}</div>}
+                                </div>
+                                <div className="grid gap-3">
+                                    <label className="text-[10px] uppercase tracking-[3px] font-black text-[#55556a] ml-1">Confirm Password</label>
+                                    <input 
+                                        type="password" 
+                                        value={editData.password_confirmation} 
+                                        onChange={e => setEditData('password_confirmation', e.target.value)} 
+                                        className="bg-white/5 border-2 border-white/5 text-white rounded-[1.25rem] px-5 py-4 outline-none focus:border-[#e8003d] focus:bg-white/[0.08] transition-all duration-300 font-medium placeholder:text-[#3a3a4a]"
+                                        placeholder="••••••••"
+                                    />
+                                </div>
                             </div>
                             <div className="flex gap-4 mt-4">
                                 <button 
