@@ -16,7 +16,6 @@ export default function ComicLayout({ children, title }) {
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
-    // Close mobile menu on resize to desktop
     useEffect(() => {
         const handleResize = () => {
             if (window.innerWidth >= 768) setMobileMenuOpen(false);
@@ -27,104 +26,75 @@ export default function ComicLayout({ children, title }) {
 
     const handleSearch = (e) => {
         e.preventDefault();
-        get(route('comics.index'), {
-            preserveState: true,
-            replace: true,
-        });
+        get(route('comics.index'), { preserveState: true, replace: true });
         setMobileMenuOpen(false);
     };
 
+    const userInitial = auth.user?.name?.charAt(0).toUpperCase() || '?';
+
+    const navLinks = [
+        { label: 'Library', r: 'comics.index', match: 'comics.index' },
+        { label: 'Shelves', r: 'shelves.index', match: 'shelves.*' },
+        { label: 'Calendar', r: 'comics.calendar', match: 'comics.calendar' },
+        ...(auth.user ? [{ label: 'Stats', r: 'reading-stats', match: 'reading-stats' }] : []),
+    ];
+
     return (
-        <div className="min-h-screen bg-[#0a0a0f] text-[#f0f0f5] font-light">
-            <header 
-                id="mainHeader"
-                className={`fixed top-0 left-0 right-0 z-[100] flex items-center justify-between px-4 sm:px-10 h-14 sm:h-16 transition-all duration-300 ${
-                    scrolled ? 'bg-[#0a0a0f]/97 border-b border-white/7 backdrop-blur-md' : 'bg-gradient-to-b from-[#0a0a0f]/98 to-transparent'
+        <div className="min-h-screen bg-[#05050a] text-[#f0f0f5]" style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 300 }}>
+
+            {/* ── HEADER ── */}
+            <header
+                className={`fixed top-0 left-0 right-0 z-[100] transition-all duration-300 ${
+                    scrolled
+                        ? 'bg-[#07070f]/95 backdrop-blur-2xl border-b border-white/[0.06] shadow-[0_4px_32px_rgba(0,0,0,0.5)]'
+                        : 'bg-gradient-to-b from-[#07070f]/90 to-transparent backdrop-blur-sm'
                 }`}
             >
-                <div className="flex items-center gap-4 sm:gap-8">
-                    <Link href={route('comics.index')} className="logo flex items-center gap-2 text-[24px] sm:text-[28px] tracking-[3px] font-['Bebas_Neue'] no-underline text-white">
-                        Comic<span className="text-[#e8003d] drop-shadow-[0_0_8px_rgba(232,0,61,0.35)]">Vault</span>
+                <div className="flex items-center justify-between px-4 sm:px-8 lg:px-14 h-[62px] max-w-[1680px] mx-auto">
+
+                    {/* Logo */}
+                    <Link href={route('comics.index')} className="flex items-center gap-2.5 no-underline group shrink-0">
+                        <div className="w-8 h-8 rounded-[10px] bg-[#e8003d] flex items-center justify-center shadow-[0_2px_18px_rgba(232,0,61,0.4)] group-hover:shadow-[0_2px_28px_rgba(232,0,61,0.6)] group-hover:scale-[1.08] transition-all duration-250">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="white">
+                                <path d="M21 4H3C1.9 4 1 4.9 1 6v13c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-10 3h8v2h-8V7zm0 4h8v2h-8v-2zm0 4h5v2h-5v-2zM5 7h3v9H5V7z"/>
+                            </svg>
+                        </div>
+                        <span className="text-[24px] sm:text-[27px] tracking-[2px] font-['Bebas_Neue'] text-white leading-none">
+                            Comic<span className="text-[#e8003d] drop-shadow-[0_0_10px_rgba(232,0,61,0.4)]">Vault</span>
+                        </span>
                     </Link>
 
                     {/* Desktop nav */}
-                    <nav className="hidden md:flex items-center gap-6 ml-4">
-                        <Link href={route('comics.index')} className={`text-[13px] tracking-widest uppercase font-medium transition-colors ${route().current('comics.index') ? 'text-[#e8003d]' : 'text-[#8888a0] hover:text-white'}`}>Library</Link>
-                        <Link href={route('shelves.index')} className={`text-[13px] tracking-widest uppercase font-medium transition-colors ${route().current('shelves.*') ? 'text-[#e8003d]' : 'text-[#8888a0] hover:text-white'}`}>Shelves</Link>
-                        <Link href={route('comics.calendar')} className={`text-[13px] tracking-widest uppercase font-medium transition-colors ${route().current('comics.calendar') ? 'text-[#e8003d]' : 'text-[#8888a0] hover:text-white'}`}>Calendar</Link>
-                        {auth.user && (
-                            <Link href={route('reading-stats')} className={`text-[13px] tracking-widest uppercase font-medium transition-colors ${route().current('reading-stats') ? 'text-[#e8003d]' : 'text-[#8888a0] hover:text-white'}`}>Stats</Link>
-                        )}
-                    </nav>
-                </div>
-
-                {/* Desktop search + auth */}
-                <div className="header-right hidden md:flex items-center gap-4">
-                    <form onSubmit={handleSearch} className="search-wrap relative flex items-center">
-                        <svg className="absolute left-3 text-[#8888a0] pointer-events-none" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="11" cy="11" r="8" />
-                            <path d="m21 21-4.35-4.35" />
-                        </svg>
-                        <input
-                            type="search"
-                            placeholder="Search comics..."
-                            value={data.q}
-                            onChange={(e) => setData('q', e.target.value)}
-                            className="bg-white/6 border border-white/7 text-[#f0f0f5] font-['DM_Sans'] text-sm py-2 pl-10 pr-4 rounded-lg w-[260px] outline-none transition-all duration-300 focus:border-[#e8003d] focus:bg-white/10 focus:w-[320px]"
-                        />
-                    </form>
-
-                    <div className="auth-links flex items-center gap-3">
-                        {auth.user ? (
-                            <>
-                                <a href={route('profile.edit')} className="auth-link text-[13px] text-[#8888a0] hover:text-white transition-colors">Profile</a>
-                                <a href={route('dashboard')} className="auth-link text-[13px] text-[#8888a0] hover:text-white transition-colors">Dashboard</a>
-                                {auth.user.is_admin && (
-                                    <a href={route('admin.comics.index')} className="auth-link text-[13px] text-[#8888a0] hover:text-white transition-colors">Admin</a>
-                                )}
-                                <Link 
-                                    href={route('logout')} 
-                                    method="post" 
-                                    as="button" 
-                                    className="auth-link text-[13px] text-[#8888a0] hover:text-white transition-colors border-none bg-transparent cursor-pointer"
+                    <nav className="hidden md:flex items-center gap-1 mx-6 lg:mx-10">
+                        {navLinks.map(({ label, r, match }) => {
+                            const active = route().current(match);
+                            return (
+                                <Link
+                                    key={label}
+                                    href={route(r)}
+                                    className={`relative text-[11.5px] font-semibold tracking-[1.8px] uppercase px-3 py-2 rounded-lg transition-all duration-200 ${
+                                        active
+                                            ? 'text-white bg-white/[0.08]'
+                                            : 'text-[#6868a0] hover:text-[#c8c8e8] hover:bg-white/[0.04]'
+                                    }`}
                                 >
-                                    Logout
+                                    {label}
+                                    {active && (
+                                        <span className="absolute bottom-[5px] left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#e8003d] shadow-[0_0_5px_rgba(232,0,61,0.9)]" />
+                                    )}
                                 </Link>
-                            </>
-                        ) : (
-                            <>
-                                <a href={route('login')} className="auth-link text-[13px] text-[#8888a0] hover:text-white transition-colors">Login</a>
-                                <a href={route('register')} className="auth-link text-[13px] text-[#8888a0] hover:text-white transition-colors">Register</a>
-                            </>
-                        )}
-                    </div>
-                </div>
+                            );
+                        })}
+                    </nav>
 
-                {/* Mobile hamburger button */}
-                <button 
-                    onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                    className="md:hidden flex items-center justify-center w-10 h-10 text-white/80 hover:text-white transition-colors"
-                    aria-label="Toggle menu"
-                >
-                    {mobileMenuOpen ? (
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                    ) : (
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-                        </svg>
-                    )}
-                </button>
-            </header>
-
-            {/* Mobile menu drawer */}
-            {mobileMenuOpen && (
-                <div className="fixed inset-x-0 top-14 z-[99] md:hidden bg-[#0a0a0f]/98 backdrop-blur-lg border-b border-white/7 animate-slideDown">
-                    <div className="flex flex-col gap-1 px-4 py-4">
+                    {/* Desktop search + auth */}
+                    <div className="hidden md:flex items-center gap-3 shrink-0">
                         {/* Search */}
-                        <form onSubmit={handleSearch} className="relative flex items-center mb-3">
-                            <svg className="absolute left-3 text-[#8888a0] pointer-events-none" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <form onSubmit={handleSearch} className="group relative">
+                            <svg
+                                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6868a0] group-focus-within:text-[#e8003d] transition-colors pointer-events-none"
+                                width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                            >
                                 <circle cx="11" cy="11" r="8" />
                                 <path d="m21 21-4.35-4.35" />
                             </svg>
@@ -133,51 +103,145 @@ export default function ComicLayout({ children, title }) {
                                 placeholder="Search comics..."
                                 value={data.q}
                                 onChange={(e) => setData('q', e.target.value)}
-                                className="w-full bg-white/6 border border-white/7 text-[#f0f0f5] font-['DM_Sans'] text-sm py-2.5 pl-10 pr-4 rounded-lg outline-none focus:border-[#e8003d] focus:bg-white/10"
+                                className="bg-white/[0.05] border border-white/[0.08] text-[#f0f0f5] text-[13px] py-[7px] pl-9 pr-4 rounded-full w-[200px] outline-none transition-all duration-300 focus:border-[#e8003d]/50 focus:bg-white/[0.08] focus:w-[270px] focus:shadow-[0_0_0_3px_rgba(232,0,61,0.1)] placeholder:text-[#4a4a6a]"
+                                style={{ fontFamily: "'DM Sans', sans-serif" }}
                             />
                         </form>
 
-                        {/* Nav links */}
-                        <Link href={route('comics.index')} onClick={() => setMobileMenuOpen(false)} className={`text-[14px] tracking-widest uppercase font-medium py-2.5 px-3 rounded-lg transition-colors ${route().current('comics.index') ? 'text-[#e8003d] bg-[#e8003d]/10' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}>Library</Link>
-                        <Link href={route('shelves.index')} onClick={() => setMobileMenuOpen(false)} className={`text-[14px] tracking-widest uppercase font-medium py-2.5 px-3 rounded-lg transition-colors ${route().current('shelves.*') ? 'text-[#e8003d] bg-[#e8003d]/10' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}>Shelves</Link>
-                        <Link href={route('comics.calendar')} onClick={() => setMobileMenuOpen(false)} className={`text-[14px] tracking-widest uppercase font-medium py-2.5 px-3 rounded-lg transition-colors ${route().current('comics.calendar') ? 'text-[#e8003d] bg-[#e8003d]/10' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}>Calendar</Link>
-                        {auth.user && (
-                            <Link href={route('reading-stats')} onClick={() => setMobileMenuOpen(false)} className={`text-[14px] tracking-widest uppercase font-medium py-2.5 px-3 rounded-lg transition-colors ${route().current('reading-stats') ? 'text-[#e8003d] bg-[#e8003d]/10' : 'text-[#8888a0] hover:text-white hover:bg-white/5'}`}>Stats</Link>
-                        )}
-
                         {/* Divider */}
-                        <div className="border-t border-white/7 my-2" />
+                        <div className="w-px h-5 bg-white/[0.1]" />
 
-                        {/* Auth links */}
+                        {/* Auth */}
                         {auth.user ? (
-                            <>
-                                <a href={route('profile.edit')} className="text-[14px] text-[#8888a0] hover:text-white py-2.5 px-3 rounded-lg transition-colors hover:bg-white/5">Profile</a>
-                                <a href={route('dashboard')} className="text-[14px] text-[#8888a0] hover:text-white py-2.5 px-3 rounded-lg transition-colors hover:bg-white/5">Dashboard</a>
+                            <div className="flex items-center gap-1.5">
                                 {auth.user.is_admin && (
-                                    <a href={route('admin.comics.index')} className="text-[14px] text-[#8888a0] hover:text-white py-2.5 px-3 rounded-lg transition-colors hover:bg-white/5">Admin</a>
+                                    <a href={route('admin.comics.index')} className="text-[12px] text-[#6868a0] hover:text-white transition-colors px-2.5 py-1.5 rounded-lg hover:bg-white/[0.05]">Admin</a>
                                 )}
-                                <Link 
-                                    href={route('logout')} 
-                                    method="post" 
-                                    as="button" 
-                                    className="text-left text-[14px] text-[#8888a0] hover:text-white py-2.5 px-3 rounded-lg transition-colors hover:bg-white/5 border-none bg-transparent cursor-pointer"
+                                <a href={route('dashboard')} className="text-[12px] text-[#6868a0] hover:text-white transition-colors px-2.5 py-1.5 rounded-lg hover:bg-white/[0.05]">Dashboard</a>
+                                <Link
+                                    href={route('logout')}
+                                    method="post"
+                                    as="button"
+                                    className="text-[12px] text-[#6868a0] hover:text-white transition-colors px-2.5 py-1.5 rounded-lg hover:bg-white/[0.05] border-none bg-transparent cursor-pointer"
                                 >
                                     Logout
                                 </Link>
-                            </>
+                                <a
+                                    href={route('profile.edit')}
+                                    className="w-[30px] h-[30px] rounded-full bg-[#e8003d]/15 border border-[#e8003d]/40 flex items-center justify-center text-[#ff3355] text-[12px] font-bold hover:bg-[#e8003d]/25 hover:border-[#e8003d]/70 hover:scale-105 transition-all ml-1"
+                                    title={auth.user.name}
+                                >
+                                    {userInitial}
+                                </a>
+                            </div>
                         ) : (
-                            <>
-                                <a href={route('login')} className="text-[14px] text-[#8888a0] hover:text-white py-2.5 px-3 rounded-lg transition-colors hover:bg-white/5">Login</a>
-                                <a href={route('register')} className="text-[14px] text-[#8888a0] hover:text-white py-2.5 px-3 rounded-lg transition-colors hover:bg-white/5">Register</a>
-                            </>
+                            <div className="flex items-center gap-2">
+                                <a href={route('login')} className="text-[12px] text-[#6868a0] hover:text-white transition-colors px-3 py-1.5 rounded-lg hover:bg-white/[0.05]">Login</a>
+                                <a href={route('register')} className="text-[12px] bg-[#e8003d] hover:bg-[#ff1050] text-white px-3.5 py-1.5 rounded-lg transition-all font-semibold hover:shadow-[0_2px_16px_rgba(232,0,61,0.35)]">
+                                    Register
+                                </a>
+                            </div>
                         )}
+                    </div>
+
+                    {/* Mobile hamburger */}
+                    <button
+                        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                        className="md:hidden w-9 h-9 flex flex-col items-center justify-center gap-[5px] text-white rounded-lg hover:bg-white/[0.06] transition-colors"
+                        aria-label="Toggle menu"
+                    >
+                        <span className={`w-[18px] h-[1.5px] bg-current origin-center transition-all duration-250 ${mobileMenuOpen ? 'rotate-45 translate-y-[6.5px]' : ''}`} />
+                        <span className={`w-[18px] h-[1.5px] bg-current transition-all duration-250 ${mobileMenuOpen ? 'opacity-0 scale-x-0' : ''}`} />
+                        <span className={`w-[18px] h-[1.5px] bg-current origin-center transition-all duration-250 ${mobileMenuOpen ? '-rotate-45 -translate-y-[6.5px]' : ''}`} />
+                    </button>
+                </div>
+            </header>
+
+            {/* ── MOBILE DRAWER ── */}
+            {mobileMenuOpen && (
+                <div className="fixed inset-x-0 top-[62px] z-[99] md:hidden animate-slideDown">
+                    <div className="bg-[#08080f]/98 backdrop-blur-2xl border-b border-white/[0.07] shadow-[0_16px_40px_rgba(0,0,0,0.7)]">
+                        <div className="px-4 py-4 space-y-0.5">
+                            {/* Mobile search */}
+                            <form onSubmit={handleSearch} className="relative mb-3">
+                                <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6868a0] pointer-events-none" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                    <circle cx="11" cy="11" r="8" />
+                                    <path d="m21 21-4.35-4.35" />
+                                </svg>
+                                <input
+                                    type="search"
+                                    placeholder="Search comics..."
+                                    value={data.q}
+                                    onChange={(e) => setData('q', e.target.value)}
+                                    className="w-full bg-white/[0.06] border border-white/[0.09] text-[#f0f0f5] text-[13px] py-2.5 pl-9 pr-4 rounded-xl outline-none focus:border-[#e8003d]/50 focus:bg-white/[0.09] placeholder:text-[#4a4a6a]"
+                                    style={{ fontFamily: "'DM Sans', sans-serif" }}
+                                />
+                            </form>
+
+                            {/* Nav links */}
+                            {navLinks.map(({ label, r, match }) => {
+                                const active = route().current(match);
+                                return (
+                                    <Link
+                                        key={label}
+                                        href={route(r)}
+                                        onClick={() => setMobileMenuOpen(false)}
+                                        className={`flex items-center gap-3 text-[14px] font-medium py-2.5 px-3 rounded-xl transition-all ${
+                                            active
+                                                ? 'text-[#ff3355] bg-[#e8003d]/10'
+                                                : 'text-[#8888a0] hover:text-white hover:bg-white/[0.05]'
+                                        }`}
+                                    >
+                                        {active && <span className="w-1.5 h-1.5 rounded-full bg-[#e8003d] shadow-[0_0_6px_rgba(232,0,61,0.8)] shrink-0" />}
+                                        {label}
+                                    </Link>
+                                );
+                            })}
+
+                            {/* Auth section */}
+                            <div className="border-t border-white/[0.07] pt-3 mt-3">
+                                {auth.user ? (
+                                    <div className="space-y-0.5">
+                                        <div className="flex items-center gap-3 px-3 py-2.5 mb-1">
+                                            <div className="w-8 h-8 rounded-full bg-[#e8003d]/15 border border-[#e8003d]/40 flex items-center justify-center text-[#ff3355] text-[13px] font-bold shrink-0">
+                                                {userInitial}
+                                            </div>
+                                            <div>
+                                                <div className="text-[14px] text-white font-medium truncate">{auth.user.name}</div>
+                                                {auth.user.is_admin && <div className="text-[10px] text-[#e8003d] uppercase tracking-wider">Admin</div>}
+                                            </div>
+                                        </div>
+                                        <a href={route('profile.edit')} className="block text-[13px] text-[#8888a0] hover:text-white py-2 px-3 rounded-xl hover:bg-white/[0.05] transition-colors">Profile settings</a>
+                                        <a href={route('dashboard')} className="block text-[13px] text-[#8888a0] hover:text-white py-2 px-3 rounded-xl hover:bg-white/[0.05] transition-colors">Dashboard</a>
+                                        {auth.user.is_admin && (
+                                            <a href={route('admin.comics.index')} className="block text-[13px] text-[#8888a0] hover:text-white py-2 px-3 rounded-xl hover:bg-white/[0.05] transition-colors">Admin panel</a>
+                                        )}
+                                        <Link
+                                            href={route('logout')}
+                                            method="post"
+                                            as="button"
+                                            className="block w-full text-left text-[13px] text-[#8888a0] hover:text-[#ff3355] py-2 px-3 rounded-xl hover:bg-[#e8003d]/[0.06] transition-colors border-none bg-transparent cursor-pointer mt-1"
+                                        >
+                                            Sign out
+                                        </Link>
+                                    </div>
+                                ) : (
+                                    <div className="flex gap-2 pt-1">
+                                        <a href={route('login')} className="flex-1 text-center text-[13px] text-white py-2.5 px-4 rounded-xl border border-white/[0.12] hover:border-white/[0.22] transition-colors">Login</a>
+                                        <a href={route('register')} className="flex-1 text-center text-[13px] bg-[#e8003d] hover:bg-[#ff1050] text-white py-2.5 px-4 rounded-xl transition-colors font-semibold">Register</a>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
 
-            <main className="pt-16 sm:pt-20 px-4 sm:px-10 pb-12">
+            {/* ── MAIN CONTENT ── */}
+            <main className="pt-[62px] px-4 sm:px-8 lg:px-14 pb-20 max-w-[1680px] mx-auto">
                 {children}
             </main>
+
             <Toast />
         </div>
     );

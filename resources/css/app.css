@@ -3,15 +3,18 @@
 @tailwind utilities;
 
 :root {
-    --bg: #0a0a0f;
-    --surface: #111118;
-    --card: #16161f;
+    --bg: #05050a;
+    --bg2: #07070f;
+    --surface: #0e0e1a;
+    --card: #13131d;
     --accent: #e8003d;
-    --accent2: #ff6b35;
+    --accent-hover: #ff1050;
+    --accent-glow: rgba(232, 0, 61, 0.35);
     --text: #f0f0f5;
-    --muted: #8888a0;
-    --border: rgba(255, 255, 255, 0.07);
-    --glow: rgba(232, 0, 61, 0.35);
+    --text-muted: #7070a0;
+    --text-dim: #4a4a6a;
+    --border: rgba(255, 255, 255, 0.06);
+    --border-hover: rgba(255, 255, 255, 0.14);
     --font-display: 'Bebas Neue', sans-serif;
     --font-body: 'DM Sans', sans-serif;
 }
@@ -21,22 +24,44 @@ body {
     color: var(--text);
     font-family: var(--font-body);
     font-weight: 300;
-    min-height: 100vh;
+    min-height: 100dvh;
     overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── SELECTION ── */
+::selection {
+    background: rgba(232, 0, 61, 0.25);
+    color: #fff;
 }
 
 /* ── SCROLLBAR ── */
 ::-webkit-scrollbar {
-    width: 4px;
+    width: 3px;
+    height: 3px;
 }
 
 ::-webkit-scrollbar-track {
-    background: var(--bg);
+    background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
     background: var(--accent);
-    border-radius: 2px;
+    border-radius: 99px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-hover);
+}
+
+/* ── SCROLLBAR HIDE UTILITY ── */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
 }
 
 /* ── PAGINATION ── */
@@ -56,39 +81,54 @@ body {
     vertical-align: middle;
 }
 
-/* Pagination links styling for a premium look */
+/* Pagination links styling */
 .pagination a,
 .pagination span {
-    color: var(--muted);
+    color: var(--text-dim);
     text-decoration: none;
-    transition: all 0.2s;
+    transition: color 0.2s, background 0.2s;
+    border-radius: 8px;
+    padding: 4px 8px;
 }
 
 .pagination a:hover {
     color: var(--accent);
+    background: rgba(232, 0, 61, 0.08);
 }
 
 .pagination .active,
 .pagination span[aria-current="page"] {
     color: var(--text);
-    font-weight: 500;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.06);
 }
 
 /* ── ANIMATIONS ── */
 @keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-8px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(-10px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
-.animate-slideDown {
-    animation: slideDown 0.2s ease-out;
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slideDown { animation: slideDown 0.2s cubic-bezier(0.16,1,0.3,1); }
+.animate-fadeIn    { animation: fadeIn  0.3s ease-out; }
+.animate-fadeUp    { animation: fadeUp  0.3s cubic-bezier(0.16,1,0.3,1); }
+
+/* ── REDUCED MOTION ── */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+    }
 }
 
 /* ── MOBILE READER ── */

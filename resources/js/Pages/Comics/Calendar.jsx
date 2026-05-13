@@ -1,17 +1,48 @@
-import React, { useState } from 'react';
+import { useMemo } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import ComicLayout from '@/Layouts/ComicLayout';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
+import {
+    Calendar as CalendarIcon,
+    ChevronLeft,
+    ChevronRight,
+    ChevronDown,
+    Sparkles,
+} from 'lucide-react';
+
+/** Shared glass surface — backdrop blur + frosted fill (ComicVault dark) */
+const glassPanel = 'rounded-2xl border border-white/[0.12] bg-white/[0.06] shadow-[0_8px_40px_rgba(0,0,0,0.45)] backdrop-blur-xl';
+const glassInset = 'rounded-xl border border-white/[0.08] bg-black/25 backdrop-blur-md';
+const glassInteractive =
+    'transition-all duration-200 hover:border-[#e8003d]/35 hover:bg-white/[0.08] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e8003d] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05050a]';
 
 export default function Calendar({ comicsByDate, month, year, auth, magazines, currentShelfId }) {
-    const [currentMonth, setCurrentMonth] = useState(parseInt(month));
-    const [currentYear, setCurrentYear] = useState(parseInt(year));
+    const currentMonth = parseInt(month, 10);
+    const currentYear = parseInt(year, 10);
 
     const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
     const firstDayOfMonth = new Date(currentYear, currentMonth - 1, 1).getDay();
 
-    const monthNames = ["January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"];
+    const monthNames = useMemo(
+        () => [
+            'January',
+            'February',
+            'March',
+            'April',
+            'May',
+            'June',
+            'July',
+            'August',
+            'September',
+            'October',
+            'November',
+            'December',
+        ],
+        []
+    );
+
+    const navigate = (params) => {
+        router.get(route('comics.calendar'), params, { preserveScroll: true });
+    };
 
     const handlePreviousMonth = () => {
         let newMonth = currentMonth - 1;
@@ -20,7 +51,7 @@ export default function Calendar({ comicsByDate, month, year, auth, magazines, c
             newMonth = 12;
             newYear -= 1;
         }
-        router.get(route('comics.calendar'), { month: newMonth, year: newYear, shelf: currentShelfId }, { preserveScroll: true });
+        navigate({ month: newMonth, year: newYear, shelf: currentShelfId || undefined });
     };
 
     const handleNextMonth = () => {
@@ -30,48 +61,112 @@ export default function Calendar({ comicsByDate, month, year, auth, magazines, c
             newMonth = 1;
             newYear += 1;
         }
-        router.get(route('comics.calendar'), { month: newMonth, year: newYear, shelf: currentShelfId }, { preserveScroll: true });
+        navigate({ month: newMonth, year: newYear, shelf: currentShelfId || undefined });
     };
 
     const handleToday = () => {
         const today = new Date();
-        router.get(route('comics.calendar'), { month: today.getMonth() + 1, year: today.getFullYear(), shelf: currentShelfId }, { preserveScroll: true });
+        navigate({
+            month: today.getMonth() + 1,
+            year: today.getFullYear(),
+            shelf: currentShelfId || undefined,
+        });
     };
+
+    const shelfChange = (value) => {
+        navigate({
+            month: currentMonth,
+            year: currentYear,
+            shelf: value || undefined,
+        });
+    };
+
+    const monthChange = (value) => {
+        navigate({ month: parseInt(value, 10), year: currentYear, shelf: currentShelfId || undefined });
+    };
+
+    const yearChange = (value) => {
+        navigate({ month: currentMonth, year: parseInt(value, 10), shelf: currentShelfId || undefined });
+    };
+
+    const yearOptions = useMemo(() => {
+        const end = new Date().getFullYear() + 2;
+        const out = [];
+        for (let y = 1950; y <= end; y++) out.push(y);
+        return out;
+    }, []);
 
     const renderDays = () => {
         const days = [];
-        // Empty slots for days before the first day of the month
+
         for (let i = 0; i < firstDayOfMonth; i++) {
-            days.push(<div key={`empty-${i}`} className="min-h-[120px] bg-base-100/30 rounded-lg shadow-inner"></div>);
+            days.push(
+                <div
+                    key={`empty-${i}`}
+                    className={`min-h-[104px] sm:min-h-[128px] rounded-xl border border-white/[0.05] bg-white/[0.02] backdrop-blur-sm ${glassInset} opacity-50`}
+                    aria-hidden
+                />
+            );
         }
 
-        // Actual days
         for (let d = 1; d <= daysInMonth; d++) {
             const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
             const dayComics = comicsByDate[dateStr] || [];
-            
             const isToday = new Date().toISOString().split('T')[0] === dateStr;
 
             days.push(
-                <div key={d} className={`min-h-[120px] bg-base-100 rounded-lg shadow border transition-colors ${isToday ? 'border-primary ring-1 ring-primary/50' : 'border-base-300 hover:border-primary/50'}`}>
-                    <div className={`p-2 font-bold text-sm ${isToday ? 'text-primary bg-primary/10 rounded-t-lg' : 'text-base-content/70'}`}>
-                        {d}
+                <div
+                    key={d}
+                    className={`group/cell relative flex min-h-[104px] flex-col overflow-hidden rounded-xl border transition-all duration-200 sm:min-h-[128px] ${glassPanel} ${
+                        isToday
+                            ? 'border-[#e8003d]/50 bg-[#e8003d]/[0.08] shadow-[0_0_0_1px_rgba(232,0,61,0.25),0_12px_40px_rgba(232,0,61,0.12)] ring-1 ring-[#e8003d]/30'
+                            : 'border-white/[0.1] bg-white/[0.05] hover:border-white/[0.18] hover:bg-white/[0.07]'
+                    }`}
+                >
+                    <div
+                        className={`flex items-center justify-between gap-2 px-2.5 py-2 sm:px-3 ${
+                            isToday ? 'bg-[#e8003d]/15' : 'bg-black/20'
+                        }`}
+                    >
+                        <span
+                            className={`font-['Bebas_Neue',sans-serif] text-lg leading-none tracking-wider tabular-nums sm:text-xl ${
+                                isToday ? 'text-white' : 'text-[#c8c8dc]'
+                            }`}
+                        >
+                            {d}
+                        </span>
+                        {isToday && (
+                            <span className="rounded-md border border-[#e8003d]/40 bg-black/30 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-[#ff8aa0] backdrop-blur-sm">
+                                Today
+                            </span>
+                        )}
                     </div>
-                    <div className="p-2 pt-0 max-h-[150px] overflow-y-auto no-scrollbar flex flex-col gap-2">
-                        {dayComics.map(comic => (
-                            <Link 
+
+                    <div className="flex max-h-[140px] flex-1 flex-col gap-1.5 overflow-y-auto px-2 pb-2 pt-0.5 sm:px-2.5 [scrollbar-color:rgba(232,0,61,0.35)_transparent] [scrollbar-width:thin]">
+                        {dayComics.map((comic) => (
+                            <Link
                                 href={route('comics.show', comic.id)}
-                                key={comic.id} 
-                                className="flex items-center gap-2 group p-1 rounded hover:bg-base-200 transition-colors"
+                                key={comic.id}
+                                className={`flex items-center gap-2 rounded-lg border border-white/[0.06] bg-black/30 p-1.5 ${glassInteractive} motion-safe:transition-transform motion-safe:hover:scale-[1.01]`}
                             >
-                                <div className="w-8 h-10 flex-shrink-0 bg-base-300 rounded overflow-hidden">
+                                <div className="h-10 w-8 shrink-0 overflow-hidden rounded-md border border-white/10 bg-[#0a0a12] shadow-inner">
                                     {comic.thumbnail ? (
-                                        <img src={`/thumbs/${comic.thumbnail}`} alt={comic.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform" loading="lazy" />
+                                        <img
+                                            src={`/thumbs/${comic.thumbnail}`}
+                                            alt=""
+                                            className="h-full w-full object-cover"
+                                            loading="lazy"
+                                            decoding="async"
+                                        />
                                     ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-[10px] text-base-content/50">No Cover</div>
+                                        <div className="flex h-full w-full items-center justify-center text-[8px] font-bold uppercase text-[#4a4a5c]">
+                                            —
+                                        </div>
                                     )}
                                 </div>
-                                <span className="text-xs font-medium truncate group-hover:text-primary transition-colors">{comic.title}</span>
+                                <span className="min-w-0 flex-1 truncate text-[11px] font-semibold leading-tight text-[#d4d4e8] motion-safe:group-hover/cell:text-white">
+                                    {comic.title}
+                                </span>
                             </Link>
                         ))}
                     </div>
@@ -84,101 +179,176 @@ export default function Calendar({ comicsByDate, month, year, auth, magazines, c
 
     return (
         <ComicLayout auth={auth}>
-            <Head title="Calendar" />
-            
-            <div className="container mx-auto px-4 py-8 max-w-7xl">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                    <div>
-                        <h1 className="text-3xl font-bold flex items-center gap-3">
-                            <CalendarIcon className="w-8 h-8 text-primary" />
-                            Release Calendar
-                        </h1>
-                        <p className="text-base-content/70 mt-1">Discover comics by the date they were added</p>
-                    </div>
+            <Head title="Release calendar" />
 
-                    <div className="flex flex-wrap items-center gap-4">
-                        {/* Magazine Filter */}
-                        <div className="relative group/select">
-                            <select 
-                                value={currentShelfId || ''}
-                                onChange={(e) => router.get(route('comics.calendar'), { month: currentMonth, year: currentYear, shelf: e.target.value }, { preserveScroll: true })}
-                                className="bg-white/5 border border-white/10 hover:border-[#e8003d] text-white font-black uppercase tracking-widest text-[10px] rounded-lg px-4 py-2.5 focus:ring-0 cursor-pointer transition-all appearance-none pr-10 min-w-[200px]"
-                            >
-                                <option value="" className="bg-[#16161f] text-white">All Magazines</option>
-                                {magazines.map((mag) => (
-                                    <option key={mag.id} value={mag.id} className="bg-[#16161f] text-white">{mag.name}</option>
-                                ))}
-                            </select>
-                            <ChevronLeft className="w-3 h-3 text-white/30 absolute right-3 top-1/2 -translate-y-1/2 -rotate-90 pointer-events-none group-hover/select:text-[#e8003d]" />
-                        </div>
+            <div className="relative pb-16">
+                {/* Ambient backdrop for glass (blur reads against this) */}
+                <div
+                    className="pointer-events-none fixed inset-0 -z-10 opacity-90"
+                    aria-hidden
+                    style={{
+                        background:
+                            'radial-gradient(1200px 600px at 15% -10%, rgba(232,0,61,0.18), transparent 55%), radial-gradient(900px 500px at 95% 20%, rgba(99,102,241,0.12), transparent 50%), radial-gradient(800px 450px at 50% 110%, rgba(232,0,61,0.08), transparent 45%), #05050a',
+                    }}
+                />
+                <div
+                    className="pointer-events-none fixed inset-0 -z-10 opacity-[0.12]"
+                    aria-hidden
+                    style={{
+                        backgroundImage: `radial-gradient(circle at 1px 1px, rgba(255,255,255,0.14) 1px, transparent 0)`,
+                        backgroundSize: '14px 14px',
+                    }}
+                />
 
-                        <div className="flex items-center gap-2 bg-base-200 p-1 rounded-xl shadow-sm border border-base-300">
-                            <button 
-                                onClick={handlePreviousMonth}
-                                className="btn btn-sm btn-ghost btn-square"
-                                aria-label="Previous month"
-                            >
-                                <ChevronLeft className="w-5 h-5" />
-                            </button>
-                            
-                            <div className="flex items-center gap-1">
-                                <div className="relative group/select">
-                                    <select 
-                                        value={currentMonth}
-                                        onChange={(e) => router.get(route('comics.calendar'), { month: e.target.value, year: currentYear, shelf: currentShelfId }, { preserveScroll: true })}
-                                        className="bg-white/5 border border-white/10 hover:border-[#e8003d] text-white font-black uppercase tracking-widest text-[10px] rounded-lg px-3 py-1.5 focus:ring-0 cursor-pointer transition-all appearance-none pr-8"
-                                    >
-                                        {monthNames.map((name, i) => (
-                                            <option key={name} value={i + 1} className="bg-[#16161f] text-white">{name}</option>
-                                        ))}
-                                    </select>
-                                    <ChevronLeft className="w-3 h-3 text-white/30 absolute right-2 top-1/2 -translate-y-1/2 -rotate-90 pointer-events-none group-hover/select:text-[#e8003d]" />
+                <div className="relative mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
+                    {/* Masthead */}
+                    <header className={`mb-6 p-5 sm:p-8 ${glassPanel}`}>
+                        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="flex min-w-0 items-start gap-4">
+                                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-[#e8003d]/35 bg-[#e8003d]/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
+                                    <CalendarIcon className="h-7 w-7 text-[#ff6b8a]" strokeWidth={1.75} aria-hidden />
                                 </div>
-
-                                <div className="relative group/select">
-                                    <select 
-                                        value={currentYear}
-                                        onChange={(e) => router.get(route('comics.calendar'), { month: currentMonth, year: e.target.value, shelf: currentShelfId }, { preserveScroll: true })}
-                                        className="bg-white/5 border border-white/10 hover:border-[#e8003d] text-white font-black uppercase tracking-widest text-[10px] rounded-lg px-3 py-1.5 focus:ring-0 cursor-pointer transition-all appearance-none pr-8"
+                                <div>
+                                    <p className="mb-1.5 inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.22em] text-[#e8003d]">
+                                        <Sparkles className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                                        ComicVault
+                                    </p>
+                                    <h1
+                                        className="text-[clamp(1.75rem,4vw,2.25rem)] leading-none tracking-[0.08em] text-white"
+                                        style={{ fontFamily: "'Bebas Neue', sans-serif" }}
                                     >
-                                        {Array.from({ length: (new Date().getFullYear() + 2) - 1950 + 1 }, (_, i) => 1950 + i).map(year => (
-                                            <option key={year} value={year} className="bg-[#16161f] text-white">{year}</option>
-                                        ))}
-                                    </select>
-                                    <ChevronLeft className="w-3 h-3 text-white/30 absolute right-2 top-1/2 -translate-y-1/2 -rotate-90 pointer-events-none group-hover/select:text-[#e8003d]" />
+                                        Release{' '}
+                                        <span className="bg-gradient-to-r from-[#ff6b8a] to-[#e8003d] bg-clip-text text-transparent">
+                                            calendar
+                                        </span>
+                                    </h1>
+                                    <p className="mt-2 max-w-md text-[14px] leading-relaxed text-[#8888a0]">
+                                        New issues by the date they landed in the vault. Filter by stack, skim the month,
+                                        jump to today.
+                                    </p>
                                 </div>
                             </div>
-                            
-                            <button 
-                                onClick={handleNextMonth}
-                                className="btn btn-sm btn-ghost btn-square"
-                                aria-label="Next month"
+
+                            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
+                                <label className="sr-only" htmlFor="calendar-shelf">
+                                    Filter by magazine or shelf
+                                </label>
+                                <div className="relative min-w-[200px] flex-1 sm:flex-initial sm:min-w-[220px]">
+                                    <select
+                                        id="calendar-shelf"
+                                        value={currentShelfId || ''}
+                                        onChange={(e) => shelfChange(e.target.value)}
+                                        className={`w-full min-h-[44px] cursor-pointer appearance-none rounded-xl border border-white/[0.12] bg-black/30 py-2.5 pl-4 pr-10 text-[12px] font-semibold text-white shadow-inner backdrop-blur-md transition-colors hover:border-[#e8003d]/35 focus:border-[#e8003d]/50 focus:outline-none focus:ring-2 focus:ring-[#e8003d]/40`}
+                                    >
+                                        <option value="">All magazines</option>
+                                        {magazines.map((mag) => (
+                                            <option key={mag.id} value={mag.id}>
+                                                {mag.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown
+                                        className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6868a0]"
+                                        strokeWidth={2}
+                                        aria-hidden
+                                    />
+                                </div>
+
+                                <div
+                                    className={`inline-flex min-h-[44px] flex-wrap items-center gap-1 rounded-xl border border-white/[0.1] bg-black/30 p-1 backdrop-blur-md sm:flex-nowrap`}
+                                >
+                                    <button
+                                        type="button"
+                                        onClick={handlePreviousMonth}
+                                        className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-transparent text-[#c8c8dc] ${glassInteractive}`}
+                                        aria-label="Previous month"
+                                    >
+                                        <ChevronLeft className="h-5 w-5" strokeWidth={2} />
+                                    </button>
+
+                                    <label className="sr-only" htmlFor="calendar-month">
+                                        Month
+                                    </label>
+                                    <div className="relative">
+                                        <select
+                                            id="calendar-month"
+                                            value={currentMonth}
+                                            onChange={(e) => monthChange(e.target.value)}
+                                            className="min-h-[40px] cursor-pointer appearance-none rounded-lg border border-white/[0.08] bg-transparent py-2 pl-3 pr-8 text-[11px] font-black uppercase tracking-widest text-white focus:outline-none focus:ring-2 focus:ring-[#e8003d]/50"
+                                        >
+                                            {monthNames.map((name, i) => (
+                                                <option key={name} value={i + 1} className="bg-[#12121a] text-white">
+                                                    {name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown
+                                            className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#6868a0]"
+                                            strokeWidth={2}
+                                            aria-hidden
+                                        />
+                                    </div>
+
+                                    <label className="sr-only" htmlFor="calendar-year">
+                                        Year
+                                    </label>
+                                    <div className="relative">
+                                        <select
+                                            id="calendar-year"
+                                            value={currentYear}
+                                            onChange={(e) => yearChange(e.target.value)}
+                                            className="min-h-[40px] w-[4.5rem] cursor-pointer appearance-none rounded-lg border border-white/[0.08] bg-transparent py-2 pl-2 pr-7 text-[11px] font-black uppercase tracking-widest text-white tabular-nums focus:outline-none focus:ring-2 focus:ring-[#e8003d]/50"
+                                        >
+                                            {yearOptions.map((y) => (
+                                                <option key={y} value={y} className="bg-[#12121a] text-white">
+                                                    {y}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown
+                                            className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#6868a0]"
+                                            strokeWidth={2}
+                                            aria-hidden
+                                        />
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={handleNextMonth}
+                                        className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-transparent text-[#c8c8dc] ${glassInteractive}`}
+                                        aria-label="Next month"
+                                    >
+                                        <ChevronRight className="h-5 w-5" strokeWidth={2} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Weekday strip */}
+                    <div className={`mb-3 grid grid-cols-7 gap-2 sm:gap-3 ${glassPanel} px-2 py-3 sm:px-4`}>
+                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                            <div
+                                key={day}
+                                className="text-center text-[10px] font-black uppercase tracking-[0.2em] text-[#6a6a82] sm:text-[11px]"
                             >
-                                <ChevronRight className="w-5 h-5" />
-                            </button>
-                        </div>
+                                {day}
+                            </div>
+                        ))}
                     </div>
-                </div>
 
-                <div className="grid grid-cols-7 gap-2 mb-2">
-                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                        <div key={day} className="text-center font-bold text-sm text-base-content/50 py-2 uppercase tracking-wider">
-                            {day}
-                        </div>
-                    ))}
-                </div>
+                    {/* Grid */}
+                    <div className="grid grid-cols-7 gap-2 sm:gap-3">{renderDays()}</div>
 
-                <div className="grid grid-cols-7 gap-2 lg:gap-3 mb-12">
-                    {renderDays()}
-                </div>
-
-                <div className="flex justify-center">
-                    <button 
-                        onClick={handleToday}
-                        className="bg-white/5 border border-white/10 text-white px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#e8003d] hover:border-[#e8003d] transition-all"
-                    >
-                        Back to Today
-                    </button>
+                    <div className="mt-8 flex justify-center">
+                        <button
+                            type="button"
+                            onClick={handleToday}
+                            className="min-h-[44px] rounded-xl border border-[#e8003d]/35 bg-[#e8003d]/15 px-8 text-[11px] font-black uppercase tracking-[0.2em] text-[#ffc8d4] backdrop-blur-sm transition-all hover:bg-[#e8003d]/25 hover:shadow-[0_8px_32px_rgba(232,0,61,0.2)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e8003d] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05050a]"
+                        >
+                            Jump to today
+                        </button>
+                    </div>
                 </div>
             </div>
         </ComicLayout>

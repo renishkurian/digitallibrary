@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useForm, Head, Link, router } from '@inertiajs/react';
+import { Loader2, RefreshCw, Sparkles, CheckCircle2, Library } from 'lucide-react';
 import ComicLayout from '@/Layouts/ComicLayout';
 import Pagination from '@/Components/Pagination';
 import ConfirmModal from '@/Components/ConfirmModal';
@@ -21,23 +22,27 @@ const TrashIcon   = () => <Icon d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2
 const RefreshIcon = () => <Icon d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />;
 const SearchIcon  = () => <Icon d="M21 21l-4.35-4.35 M11 19A8 8 0 1 0 11 3a8 8 0 0 0 0 16z" stroke={2.5} />;
 
-// ─── reusable checkbox ────────────────────────────────────────────────────────
-function Checkbox({ checked, onChange, color = '#e8003d' }) {
+// ─── reusable checkbox (keyboard + screen readers) ───────────────────────────
+function Checkbox({ checked, onChange, color = '#e8003d', 'aria-label': ariaLabel }) {
     return (
-        <div
+        <button
+            type="button"
+            role="checkbox"
+            aria-checked={checked}
+            aria-label={ariaLabel}
             onClick={onChange}
-            className="w-[18px] h-[18px] rounded-[4px] border flex items-center justify-center cursor-pointer transition-all flex-shrink-0"
+            className="flex h-[20px] w-[20px] shrink-0 cursor-pointer items-center justify-center rounded-[5px] border transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e8003d] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a12]"
             style={{
                 background: checked ? color : 'transparent',
-                borderColor: checked ? color : 'rgba(255,255,255,0.2)',
+                borderColor: checked ? color : 'rgba(255,255,255,0.22)',
             }}
         >
             {checked && (
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" aria-hidden>
                     <polyline points="20 6 9 17 4 12" />
                 </svg>
             )}
-        </div>
+        </button>
     );
 }
 
@@ -72,7 +77,13 @@ function ActionBtn({ onClick, title, children, variant = 'ghost' }) {
         accent:  "bg-[#e8003d]/10 text-[#e8003d] hover:bg-[#e8003d] hover:text-white border border-[#e8003d]/20",
     };
     return (
-        <button onClick={onClick} title={title} className={`${base} ${variants[variant]}`}>
+        <button
+            type="button"
+            onClick={onClick}
+            title={title}
+            aria-label={title}
+            className={`${base} ${variants[variant]}`}
+        >
             {children}
         </button>
     );
@@ -279,34 +290,30 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
 
     // ── render ────────────────────────────────────────────────────────────────
     return (
-        <ComicLayout auth={auth} fullHeight>
+        <ComicLayout auth={auth}>
             <Head title="Manage Comics" />
 
-            {/*
-              ┌─────────────────────────────────────────────────────────────┐
-              │  FIXED-HEIGHT SHELL — fills viewport height passed from     │
-              │  ComicLayout via CSS. Only .scroll-zone overflows.          │
-              └─────────────────────────────────────────────────────────────┘
-              Add this to your global CSS / app.css:
-                .admin-shell { display:flex; flex-direction:column; height:100%; overflow:hidden; }
-                .scroll-zone { flex:1; overflow-y:auto; overflow-x:hidden; }
-                .scroll-zone::-webkit-scrollbar { width:4px }
-                .scroll-zone::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.1); border-radius:4px }
-              And make ComicLayout pass height:100vh (minus its own nav) down.
-            */}
-
-            <div className="admin-shell" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+            <div
+                className="admin-shell -mx-4 flex max-h-[calc(100dvh-8.5rem)] min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.09] bg-gradient-to-b from-[#0c0c16] via-[#090912] to-[#050508] shadow-[0_24px_80px_rgba(0,0,0,0.55)] sm:-mx-8 lg:-mx-14"
+            >
 
                 {/* ── HEADER BAR ──────────────────────────────────────── */}
-                <div style={{ flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.06)', background: '#0e0e16' }}>
+                <div className="shrink-0 border-b border-white/[0.06] bg-[#0e0e16]/95 backdrop-blur-md">
                     {/* Top row */}
-                    <div className="flex items-center justify-between px-6 py-3 gap-4 flex-wrap">
-                        <div className="flex items-center gap-3">
-                            <h1 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, letterSpacing: 3, color: '#fff' }}>
-                                Library <span style={{ color: '#e8003d' }}>Management</span>
+                    <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-6 flex-wrap">
+                        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                            <Link
+                                href={route('comics.index')}
+                                className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 text-[11px] font-bold uppercase tracking-wider text-[#8888a0] transition-all hover:border-white/15 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e8003d] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0e0e16]"
+                            >
+                                <Library className="h-4 w-4 text-[#e8003d]" strokeWidth={2} aria-hidden />
+                                <span className="hidden sm:inline">Reader</span>
+                            </Link>
+                            <h1 className="text-xl tracking-[0.2em] text-white" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+                                Archive <span className="text-[#e8003d]">Desk</span>
                             </h1>
                             {/* Quick nav links */}
-                            <div className="flex items-center gap-1 ml-4">
+                            <nav className="ml-1 flex flex-wrap items-center gap-0.5 border-l border-white/[0.06] pl-3 sm:ml-4" aria-label="Admin sections">
                                 {[
                                     { href: route('admin.users.index'), label: 'Users' },
                                     { href: route('admin.shelves.index'), label: 'Shelves' },
@@ -315,32 +322,35 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                                     { href: route('admin.logs.index'), label: 'Activity' },
                                 ].map(({ href, label }) => (
                                     <Link key={label} href={href}
-                                        className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg text-[#666688] hover:text-white hover:bg-white/8 transition-all">
+                                        className="rounded-lg px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-[#666688] transition-all hover:bg-white/[0.06] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e8003d] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0e0e16] sm:px-3">
                                         {label}
                                     </Link>
                                 ))}
-                            </div>
+                            </nav>
                         </div>
 
                         {/* Sync status + upload toggle */}
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                             {syncStatus.status === 'running' && (
-                                <span className="text-[11px] text-blue-400 font-bold uppercase tracking-wider animate-pulse">
-                                    ⟳ {syncStatus.progress || 'Syncing...'}
+                                <span className="inline-flex max-w-[min(100%,14rem)] items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-blue-400 motion-safe:animate-pulse">
+                                    <Loader2 className="h-3.5 w-3.5 shrink-0 motion-safe:animate-spin" strokeWidth={2.5} aria-hidden />
+                                    <span className="truncate">{syncStatus.progress || 'Syncing…'}</span>
                                 </span>
                             )}
                             {syncStatus.status === 'idle' && syncStatus.last_sync_at && (
-                                <span className="text-[10px] text-[#44445a] uppercase tracking-tighter">
+                                <span className="text-[10px] uppercase tracking-tighter text-[#44445a]">
                                     Synced {new Date(syncStatus.last_sync_at).toLocaleString()}
                                 </span>
                             )}
-                            <button onClick={runSync} disabled={syncProcessing || syncStatus.status === 'running'}
-                                className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-white/10 text-[#888] hover:text-white hover:border-white/20 transition-all disabled:opacity-40"
+                            <button type="button" onClick={runSync} disabled={syncProcessing || syncStatus.status === 'running'}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-[#888] transition-all hover:border-white/20 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e8003d] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0e0e16] disabled:opacity-40"
                                 title="Scan system for new comics and duplicates">
-                                ⟳ Ingress
+                                <RefreshCw className={`h-3.5 w-3.5 shrink-0 ${syncStatus.status === 'running' ? 'motion-safe:animate-spin' : ''}`} strokeWidth={2.5} aria-hidden />
+                                Ingress
                             </button>
-                            <button onClick={() => setUploadPanelOpen(p => !p)}
-                                className="text-[11px] font-bold uppercase tracking-wider px-4 py-1.5 rounded-lg border transition-all"
+                            <button type="button" onClick={() => setUploadPanelOpen(p => !p)}
+                                aria-expanded={uploadPanelOpen}
+                                className="rounded-lg border px-4 py-1.5 text-[11px] font-bold uppercase tracking-wider transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e8003d] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0e0e16]"
                                 style={{ background: uploadPanelOpen ? '#e8003d' : 'rgba(232,0,61,0.12)', borderColor: 'rgba(232,0,61,0.4)', color: uploadPanelOpen ? '#fff' : '#e8003d' }}>
                                 + Upload PDF
                             </button>
@@ -349,7 +359,7 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
 
                     {/* Upload slide-down panel */}
                     {uploadPanelOpen && (
-                        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', background: '#0a0a12', padding: '20px 24px' }}>
+                        <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-2 motion-safe:duration-200 border-t border-white/[0.06] bg-[#0a0a12] px-4 py-5 sm:px-6">
                             <form onSubmit={submitUpload} className="flex items-end gap-6 flex-wrap">
                                 <div className="flex flex-col gap-1.5">
                                     <label className="text-[10px] font-bold uppercase tracking-widest text-[#666688]">PDF File *</label>
@@ -379,8 +389,8 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
 
                                 <div className="flex items-center gap-4">
                                     {[['is_personal', 'Personal', '#3b82f6'], ['generate_ai', 'AI Tags', '#a855f7']].map(([key, label, color]) => (
-                                        <label key={key} className="flex items-center gap-2 cursor-pointer">
-                                            <Checkbox checked={uploadData[key]} onChange={() => setUploadData(key, !uploadData[key])} color={color} />
+                                        <label key={key} className="flex cursor-pointer items-center gap-2">
+                                            <Checkbox checked={uploadData[key]} onChange={() => setUploadData(key, !uploadData[key])} color={color} aria-label={key === 'is_personal' ? 'Personal library only' : 'Generate AI tags when uploading'} />
                                             <span className="text-[12px] text-[#888]">{label}</span>
                                         </label>
                                     ))}
@@ -412,18 +422,18 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                     )}
 
                     {/* Toolbar: filters + search + actions */}
-                    <div className="flex items-center gap-3 px-6 py-2.5 flex-wrap" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                    <div className="flex flex-wrap items-center gap-3 border-t border-white/[0.04] px-4 py-2.5 sm:px-6">
                         {/* Search */}
                         <form onSubmit={handleSearch} className="relative flex items-center">
                             <span className="absolute left-3 text-[#44445a] pointer-events-none">
                                 <SearchIcon />
                             </span>
                             <input
-                                type="text"
+                                type="search"
                                 placeholder="Search comics…"
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
-                                className="bg-white/5 border border-white/8 text-white text-[12px] py-1.5 pl-9 pr-8 rounded-lg w-56 outline-none focus:border-[#e8003d]/50 transition-all placeholder:text-[#44445a]"
+                                className="w-56 rounded-lg border border-white/8 bg-white/5 py-1.5 pl-9 pr-8 text-[12px] text-white outline-none transition-all placeholder:text-[#44445a] focus:border-[#e8003d]/50 focus:ring-2 focus:ring-[#e8003d]/25"
                             />
                             {searchQuery && (
                                 <button type="button" onClick={() => { setSearchQuery(''); router.get(route('admin.comics.index'), { ...filters, q: '' }, { replace: true }); }}
@@ -445,14 +455,11 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                         </div>
 
                         {/* Tab filters */}
-                        <div className="flex items-center gap-0.5 bg-white/4 border border-white/8 rounded-lg p-0.5">
+                        <div className="flex items-center gap-0.5 rounded-lg border border-white/8 bg-white/[0.04] p-0.5" role="tablist" aria-label="Filter by visibility or status">
                             {TABS.map(tab => (
-                                <button key={tab.key}
+                                <button key={tab.key} type="button" role="tab" aria-selected={isTabActive(tab)}
                                     onClick={() => tab.filter === 'approval' ? setApprovalFilter(tab.key) : setVisibility(tab.key)}
-                                    className="px-4 py-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider transition-all"
-                                    style={isTabActive(tab)
-                                        ? { background: '#e8003d', color: '#fff' }
-                                        : { color: '#666688' }}>
+                                    className={`rounded-md px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e8003d] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0e0e16] sm:px-4 ${isTabActive(tab) ? 'bg-[#e8003d] text-white shadow-[0_0_20px_rgba(232,0,61,0.25)]' : 'text-[#666688] hover:bg-white/[0.06] hover:text-[#a0a0b8]'}`}>
                                     {tab.label}
                                 </button>
                             ))}
@@ -461,30 +468,33 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                         <div className="flex-1" />
 
                         {/* Approve + autotag all */}
-                        <button onClick={approveAllPending}
-                            className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all">
-                            ✓ Approve All
+                        <button type="button" onClick={approveAllPending}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-400 transition-all hover:bg-emerald-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0e0e16]">
+                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} aria-hidden />
+                            Approve All
                         </button>
-                        <button onClick={autoTagAllPending}
-                            className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-purple-500/25 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-all">
-                            ✦ Auto-Tag All
+                        <button type="button" onClick={autoTagAllPending}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-purple-500/25 bg-purple-500/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-purple-400 transition-all hover:bg-purple-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0e0e16]">
+                            <Sparkles className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} aria-hidden />
+                            Auto-Tag All
                         </button>
                     </div>
 
                     {/* Bulk action bar — appears when rows are selected */}
                     {selectedIds.length > 0 && (
-                        <div className="flex items-center gap-3 px-6 py-2 flex-wrap" style={{ background: 'rgba(232,0,61,0.06)', borderTop: '1px solid rgba(232,0,61,0.15)' }}>
+                        <div className="flex flex-wrap items-center gap-3 border-t border-[#e8003d]/15 bg-[#e8003d]/[0.06] px-4 py-2 sm:px-6">
                             <span className="text-[11px] font-black text-[#e8003d] uppercase tracking-wider">
                                 {selectedIds.length} selected
                             </span>
                             <div className="w-px h-4 bg-white/10" />
-                            <button onClick={bulkApprove}
-                                className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg bg-[#e8003d] text-white hover:bg-[#ff1a4d] transition-all">
+                            <button type="button" onClick={bulkApprove}
+                                className="rounded-lg bg-[#e8003d] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white transition-all hover:bg-[#ff1a4d] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e8003d] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a12]">
                                 Approve
                             </button>
-                            <button onClick={bulkGenerateAiMeta}
-                                className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-all">
-                                ✦ AI Tag
+                            <button type="button" onClick={bulkGenerateAiMeta}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-purple-400 transition-all hover:bg-purple-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a12]">
+                                <Sparkles className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} aria-hidden />
+                                AI Tag
                             </button>
                             <button onClick={bulkToggleVisibility}
                                 className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-[#3b82f6]/30 bg-[#3b82f6]/10 text-[#3b82f6] hover:bg-[#3b82f6]/20 transition-all flex items-center gap-1.5"
@@ -525,7 +535,7 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                                     Move to Trash
                                 </button>
                             )}
-                            <button onClick={() => setSelectedIds([])} className="ml-auto text-[#44445a] hover:text-white transition-colors">
+                            <button type="button" onClick={() => setSelectedIds([])} className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-lg text-[#44445a] transition-colors hover:bg-white/[0.06] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e8003d] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a12]" aria-label="Clear selection">
                                 <XIcon />
                             </button>
                         </div>
@@ -533,51 +543,45 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                 </div>
 
                 {/* ── SCROLLABLE TABLE ZONE ───────────────────────────── */}
-                <div className="scroll-zone" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
-                    <div style={{ overflowX: 'auto' }}>
-                        <table style={{ minWidth: 860, width: '100%', borderCollapse: 'collapse' }}>
-                            <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#0b0b14' }}>
-                                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                                    <th className="px-4 py-3 w-10">
+                <div className="scroll-zone min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+                    <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
+                        <table className="w-full min-w-[860px] border-collapse">
+                            <caption className="sr-only">Comics in the library: sortable list with actions</caption>
+                            <thead className="sticky top-0 z-20 border-b border-white/[0.07] bg-[#0a0a12]/95 backdrop-blur-md">
+                                <tr>
+                                    <th scope="col" className="w-10 px-4 py-3">
                                         <input type="checkbox"
                                             checked={selectedIds.length === comics.data.length && comics.data.length > 0}
                                             onChange={handleSelectAll}
-                                            className="w-4 h-4 rounded accent-[#e8003d] cursor-pointer" />
+                                            aria-label="Select all comics on this page"
+                                            className="h-4 w-4 cursor-pointer rounded accent-[#e8003d] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e8003d] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a12]" />
                                     </th>
-                                    {['TMB', 'Comic', 'Shelf', 'Categories', 'Status', 'Shared', 'By', 'Actions'].map((h, i) => (
-                                        <th key={h} className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest whitespace-nowrap"
-                                            style={{ color: '#44445a', textAlign: h === 'Actions' ? 'right' : 'left' }}>
+                                    {['TMB', 'Comic', 'Shelf', 'Categories', 'Status', 'Shared', 'By', 'Actions'].map((h) => (
+                                        <th key={h} scope="col"
+                                            className={`whitespace-nowrap px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest text-[#44445a] ${h === 'Actions' ? 'text-right' : ''}`}>
                                             {h}
                                         </th>
                                     ))}
                                 </tr>
                             </thead>
                             <tbody>
-                                {comics.data.map((comic, idx) => (
+                                {comics.data.map((comic) => (
                                     <tr key={comic.id}
-                                        style={{
-                                            borderBottom: '1px solid rgba(255,255,255,0.04)',
-                                            background: selectedIds.includes(comic.id) ? 'rgba(232,0,61,0.05)' : 'transparent',
-                                            opacity: comic.is_hidden ? 0.6 : 1,
-                                            transition: 'background 0.1s',
-                                        }}
-                                        onMouseEnter={e => { if (!selectedIds.includes(comic.id)) e.currentTarget.style.background = 'rgba(255,255,255,0.025)'; }}
-                                        onMouseLeave={e => { e.currentTarget.style.background = selectedIds.includes(comic.id) ? 'rgba(232,0,61,0.05)' : 'transparent'; }}>
+                                        className={`group border-b border-white/[0.04] transition-colors motion-safe:duration-150 ${selectedIds.includes(comic.id) ? 'bg-[#e8003d]/[0.06]' : 'bg-transparent hover:bg-white/[0.025]'} ${comic.is_hidden ? 'opacity-60' : ''}`}>
 
-                                        {/* Checkbox */}
                                         <td className="px-4 py-3">
                                             <input type="checkbox" checked={selectedIds.includes(comic.id)} onChange={() => toggleSelect(comic.id)}
-                                                className="w-4 h-4 rounded accent-[#e8003d] cursor-pointer" />
+                                                aria-label={`Select ${comic.title}`}
+                                                className="h-4 w-4 cursor-pointer rounded accent-[#e8003d] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e8003d] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a12]" />
                                         </td>
 
-                                        {/* Thumbnail */}
                                         <td className="px-4 py-3">
                                             <Link href={route('comics.show', comic.id)} target="_blank"
-                                                className="block w-9 h-12 rounded-md overflow-hidden flex-shrink-0"
+                                                className="block h-12 w-9 shrink-0 overflow-hidden rounded-md"
                                                 style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.04)' }}>
                                                 {comic.thumbnail
-                                                    ? <img src={`/thumbs/${comic.thumbnail}`} className="w-full h-full object-cover" alt="" />
-                                                    : <div className="w-full h-full flex items-center justify-center text-[9px] font-bold text-[#44445a]">NA</div>
+                                                    ? <img src={`/thumbs/${comic.thumbnail}`} className="h-full w-full object-cover" alt="" loading="lazy" decoding="async" />
+                                                    : <div className="flex h-full w-full items-center justify-center text-[9px] font-bold text-[#44445a]">NA</div>
                                                 }
                                             </Link>
                                         </td>
@@ -643,7 +647,7 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                                                     <ActionBtn onClick={() => approveComic(comic.id)} title="Approve" variant="green"><CheckIcon /></ActionBtn>
                                                 )}
                                                 <ActionBtn onClick={() => { setSharingComic(comic); setShareUserId(''); }} title="Share" variant="blue"><ShareIcon /></ActionBtn>
-                                                <ActionBtn onClick={() => generateAiMeta(comic.id)} title="AI Tag" variant="purple">✦</ActionBtn>
+                                                <ActionBtn onClick={() => generateAiMeta(comic.id)} title="AI Tag" variant="purple"><Sparkles className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden /></ActionBtn>
                                                 <Link href={route('admin.comics.regenerate-thumbnail', comic.id)} method="post" as="button" preserveScroll>
                                                     <ActionBtn title="Regen Thumbnail">
                                                         <span className="text-[9px] font-black tracking-tighter">TMB</span>
@@ -712,8 +716,8 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                                 <label className="text-[10px] font-black uppercase tracking-widest text-[#666688]">Shelves</label>
                                 <div className="rounded-lg p-3 flex flex-col gap-1.5 overflow-y-auto" style={{ height: 120, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
                                     {shelves.map(s => (
-                                        <label key={s.id} className="flex items-center gap-2.5 cursor-pointer">
-                                            <Checkbox checked={(editData.shelf_ids || []).includes(s.id)} onChange={() => toggle('shelf_ids', s.id)} />
+                                        <label key={s.id} className="flex cursor-pointer items-center gap-2.5">
+                                            <Checkbox checked={(editData.shelf_ids || []).includes(s.id)} onChange={() => toggle('shelf_ids', s.id)} aria-label={`Assign shelf ${s.name}`} />
                                             <span className="text-[12px] text-[#8888a0]">{s.name}</span>
                                         </label>
                                     ))}
@@ -725,8 +729,8 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                                 <label className="text-[10px] font-black uppercase tracking-widest text-[#666688]">Categories</label>
                                 <div className="rounded-lg p-3 flex flex-col gap-1.5 overflow-y-auto" style={{ height: 120, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
                                     {categories.map(cat => (
-                                        <label key={cat.id} className="flex items-center gap-2.5 cursor-pointer">
-                                            <Checkbox checked={editData.category_ids.includes(cat.id)} onChange={() => toggle('category_ids', cat.id)} />
+                                        <label key={cat.id} className="flex cursor-pointer items-center gap-2.5">
+                                            <Checkbox checked={editData.category_ids.includes(cat.id)} onChange={() => toggle('category_ids', cat.id)} aria-label={`Category ${cat.name}`} />
                                             <span className="text-[12px] text-[#8888a0]">{cat.name}</span>
                                         </label>
                                     ))}
@@ -741,8 +745,8 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                                     ['is_personal', 'Personal (Private)', '#3b82f6'],
                                     ['is_approved', 'Admin Approved', '#22c55e'],
                                 ].map(([key, label, color]) => (
-                                    <label key={key} className="flex items-center gap-2.5 cursor-pointer">
-                                        <Checkbox checked={editData[key]} onChange={() => setEditData(key, !editData[key])} color={color} />
+                                    <label key={key} className="flex cursor-pointer items-center gap-2.5">
+                                        <Checkbox checked={editData[key]} onChange={() => setEditData(key, !editData[key])} color={color} aria-label={label} />
                                         <span className="text-[12px] text-[#8888a0]">{label}</span>
                                     </label>
                                 ))}
@@ -828,10 +832,11 @@ export default function Index({ comics, auth, shelves, categories, users, roles,
                                 </div>
 
                                 <label className="flex items-center gap-2.5 cursor-pointer self-start">
-                                    <Checkbox 
-                                        checked={renameData.update_title} 
-                                        onChange={() => setRenameData('update_title', !renameData.update_title)} 
-                                        color="#e8003d" 
+                                    <Checkbox
+                                        checked={renameData.update_title}
+                                        onChange={() => setRenameData('update_title', !renameData.update_title)}
+                                        color="#e8003d"
+                                        aria-label="Update comic title to match new filename"
                                     />
                                     <span className="text-[11px] text-[#8888a0] font-medium">Update comic title to match new filename</span>
                                 </label>
