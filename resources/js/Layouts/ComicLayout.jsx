@@ -33,9 +33,10 @@ export default function ComicLayout({ children, title }) {
     const userInitial = auth.user?.name?.charAt(0).toUpperCase() || '?';
 
     const navLinks = [
-        { label: 'Library', r: 'comics.index', match: 'comics.index' },
         { label: 'Shelves', r: 'shelves.index', match: 'shelves.*' },
+        { label: 'Library', r: 'comics.index', match: 'comics.index' },
         { label: 'Calendar', r: 'comics.calendar', match: 'comics.calendar' },
+        ...(auth.user ? [{ label: 'Lists', r: 'lists.index', match: 'lists.*' }] : []),
         ...(auth.user ? [{ label: 'Stats', r: 'reading-stats', match: 'reading-stats' }] : []),
     ];
 
@@ -53,7 +54,7 @@ export default function ComicLayout({ children, title }) {
                 <div className="flex items-center justify-between px-4 sm:px-8 lg:px-14 h-[62px] max-w-[1680px] mx-auto">
 
                     {/* Logo */}
-                    <Link href={route('comics.index')} className="flex items-center gap-2.5 no-underline group shrink-0">
+                    <Link href={route('shelves.index')} className="flex items-center gap-2.5 no-underline group shrink-0">
                         <div className="w-8 h-8 rounded-[10px] bg-[#e8003d] flex items-center justify-center shadow-[0_2px_18px_rgba(232,0,61,0.4)] group-hover:shadow-[0_2px_28px_rgba(232,0,61,0.6)] group-hover:scale-[1.08] transition-all duration-250">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="white">
                                 <path d="M21 4H3C1.9 4 1 4.9 1 6v13c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-10 3h8v2h-8V7zm0 4h8v2h-8v-2zm0 4h5v2h-5v-2zM5 7h3v9H5V7z"/>
@@ -147,7 +148,7 @@ export default function ComicLayout({ children, title }) {
                     {/* Mobile hamburger */}
                     <button
                         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                        className="md:hidden w-9 h-9 flex flex-col items-center justify-center gap-[5px] text-white rounded-lg hover:bg-white/[0.06] transition-colors"
+                        className="md:hidden inline-flex min-h-11 min-w-11 shrink-0 flex-col items-center justify-center gap-[5px] rounded-lg text-white transition-colors hover:bg-white/[0.06]"
                         aria-label="Toggle menu"
                     >
                         <span className={`w-[18px] h-[1.5px] bg-current origin-center transition-all duration-250 ${mobileMenuOpen ? 'rotate-45 translate-y-[6.5px]' : ''}`} />
@@ -238,7 +239,7 @@ export default function ComicLayout({ children, title }) {
             )}
 
             {/* ── MAIN CONTENT ── */}
-            <main className="pt-[62px] px-4 sm:px-8 lg:px-14 pb-20 max-w-[1680px] mx-auto">
+            <main className="mx-auto min-w-0 w-full max-w-[1680px] overflow-x-hidden pt-[62px] px-4 sm:px-8 lg:px-14 pb-20">
                 {children}
             </main>
 

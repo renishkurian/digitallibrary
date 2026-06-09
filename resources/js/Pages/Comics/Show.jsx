@@ -7,7 +7,13 @@ import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
-export default function Show({ comic, last_read_page, personal_shelves, bookmarks: initialBookmarks, prev_comic, next_comic, magazine_name, display_date }) {
+const isMobileReaderViewport = () => {
+    if (typeof window === 'undefined') return false;
+    const coarse = window.matchMedia('(pointer: coarse)').matches;
+    return window.innerWidth < 768 || (coarse && window.innerWidth < 1200);
+};
+
+export default function Show({ comic, last_read_page, personal_shelves, bookmarks: initialBookmarks, prev_comic, next_comic, magazine_name, display_date, similar_comics = [], read_lists = [] }) {
     const [pdfDoc, setPdfDoc] = useState(null);
     const [pageNum, setPageNum] = useState(last_read_page || 1);
     const [numPages, setNumPages] = useState(0);
@@ -16,11 +22,23 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
     const [showAIInfo, setShowAIInfo] = useState(false);
     const [showMobileMenu, setShowMobileMenu] = useState(false);
     const [showShelfMenu, setShowShelfMenu] = useState(false);
+    const [showReadListMenu, setShowReadListMenu] = useState(false);
     const [viewMode, setViewMode] = useState(() => {
         if (typeof window !== 'undefined') {
-            return localStorage.getItem('comic_view_mode') || 'single';
+            const saved = localStorage.getItem('comic_view_mode');
+            if (saved) return saved;
+            return 'single';
         }
         return 'single';
+    });
+    const [isMobile, setIsMobile] = useState(() => isMobileReaderViewport());
+    const [isPortrait, setIsPortrait] = useState(() => typeof window !== 'undefined' && window.innerHeight > window.innerWidth);
+    const [chromeVisible, setChromeVisible] = useState(true);
+    const [showSwipeHint, setShowSwipeHint] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return isMobileReaderViewport() && !localStorage.getItem('comic_swipe_hint_seen');
+        }
+        return false;
     });
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [bookmarksList, setBookmarksList] = useState(initialBookmarks || []);
@@ -49,6 +67,12 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
     const touchStartRef = useRef(null);
     const observerRef = useRef(null);
     const readerContainerRef = useRef(null);
+    const autoFitDone = useRef(false);
+    const bookWideSpreadRef = useRef(false);
+    const [bookWideSpread, setBookWideSpread] = useState(false);
+
+    const effectiveViewMode = isMobile && viewMode === 'book' ? 'single' : viewMode;
+    const isWidePdfPage = (viewport) => viewport.width / viewport.height > 1.12;
 
     // Fullscreen toggle
     const toggleFullscreen = useCallback(() => {
@@ -108,14 +132,114 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
         localStorage.setItem('comic_view_mode', viewMode);
     }, [viewMode]);
 
+    // Track mobile + orientation (landscape phones exceed 640px width)
+    useEffect(() => {
+        const check = () => {
+            setIsMobile(isMobileReaderViewport());
+            setIsPortrait(window.innerHeight > window.innerWidth);
+            autoFitDone.current = false;
+        };
+        window.addEventListener('resize', check);
+        window.addEventListener('orientationchange', check);
+        return () => {
+            window.removeEventListener('resize', check);
+            window.removeEventListener('orientationchange', check);
+        };
+    }, []);
+
+    // Fit page/spread to the available reader area
+    const computeFitScale = useCallback(async (fitPageNum) => {
+        const container = scrollRef.current;
+        if (!container || !pdfDoc || container.clientWidth < 50) return null;
+
+        const padX = isMobile ? 8 : 48;
+        const padY = isMobile ? 8 : 48;
+        const portrait = container.clientHeight > container.clientWidth;
+        const clamp = (n) => Math.min(3.0, Math.max(0.5, n));
+
+        if (effectiveViewMode === 'book') {
+            const leftNum = fitPageNum % 2 === 1 ? fitPageNum : fitPageNum - 1;
+            const leftPage = await pdfDoc.getPage(Math.max(1, leftNum));
+            const lv = leftPage.getViewport({ scale: 1.0 });
+            const wide = isWidePdfPage(lv);
+
+            let spreadW = lv.width;
+            let spreadH = lv.height;
+            if (!wide) {
+                const rightNum = Math.min(leftNum + 1, pdfDoc.numPages);
+                if (rightNum > leftNum) {
+                    const rightPage = await pdfDoc.getPage(rightNum);
+                    const rv = rightPage.getViewport({ scale: 1.0 });
+                    spreadW = lv.width + rv.width;
+                    spreadH = Math.max(lv.height, rv.height);
+                }
+            }
+
+            const fitWidth = (container.clientWidth - padX) / spreadW;
+            const fitHeight = (container.clientHeight - padY) / spreadH;
+            return clamp(Math.min(fitWidth, fitHeight));
+        }
+
+        const page = await pdfDoc.getPage(fitPageNum);
+        const viewport = page.getViewport({ scale: 1.0 });
+        const fitWidth = (container.clientWidth - padX) / viewport.width;
+        const fitHeight = (container.clientHeight - padY) / viewport.height;
+
+        if (isMobile && effectiveViewMode === 'single' && portrait && container.clientHeight > 50) {
+            return clamp(Math.min(fitWidth, fitHeight));
+        }
+
+        if (!isMobile && effectiveViewMode === 'single') {
+            return clamp(Math.min(fitWidth, fitHeight));
+        }
+
+        return clamp(fitWidth);
+    }, [pdfDoc, isMobile, effectiveViewMode]);
+
+    // Re-fit when view mode changes
+    useEffect(() => {
+        if (!pdfDoc) return;
+        autoFitDone.current = false;
+    }, [pdfDoc, effectiveViewMode, viewMode]);
+
+    // Re-fit on mobile when layout changes
+    useEffect(() => {
+        if (!isMobile || !pdfDoc) return;
+        autoFitDone.current = false;
+    }, [chromeVisible, pageNum, isPortrait, isMobile, pdfDoc]);
+
+    // Auto-hide chrome on mobile after idle
+    useEffect(() => {
+        if (!isMobile || !chromeVisible) return;
+        const timer = setTimeout(() => setChromeVisible(false), 4000);
+        return () => clearTimeout(timer);
+    }, [isMobile, chromeVisible, pageNum]);
+
+    // Dismiss swipe hint after a few seconds
+    useEffect(() => {
+        if (!showSwipeHint) return;
+        const timer = setTimeout(() => {
+            setShowSwipeHint(false);
+            localStorage.setItem('comic_swipe_hint_seen', '1');
+        }, 5000);
+        return () => clearTimeout(timer);
+    }, [showSwipeHint]);
+
     // ─── Single-page rendering ───
-    const renderPage = useCallback((num, currentScale) => {
+    const renderPage = useCallback((num, currentScale, retries = 0) => {
         if (!pdfDoc) return;
 
         pdfDoc.getPage(num).then((page) => {
             const viewport = page.getViewport({ scale: currentScale });
             const canvas = canvasRef.current;
-            if (!canvas) return;
+            if (!canvas) {
+                if (retries < 30) {
+                    requestAnimationFrame(() => renderPage(num, currentScale, retries + 1));
+                } else {
+                    setLoading(false);
+                }
+                return;
+            }
 
             const context = canvas.getContext('2d');
             canvas.height = viewport.height;
@@ -141,7 +265,7 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
         });
     }, [pdfDoc]);
 
-    // ─── Book mode rendering (two pages side by side) ───
+    // ─── Book mode: two portrait pages, or one wide spread if PDF page is already landscape ───
     const renderBookPages = useCallback((leftPageNum, currentScale) => {
         if (!pdfDoc) return;
 
@@ -151,39 +275,53 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
                     canvasEl.width = 0;
                     canvasEl.height = 0;
                 }
-                return;
+                return Promise.resolve();
             }
-            pdfDoc.getPage(pageNumber).then((page) => {
+            return pdfDoc.getPage(pageNumber).then((page) => {
                 const viewport = page.getViewport({ scale: currentScale });
                 const context = canvasEl.getContext('2d');
                 canvasEl.height = viewport.height;
                 canvasEl.width = viewport.width;
-                page.render({ canvasContext: context, viewport });
+                return page.render({ canvasContext: context, viewport }).promise;
             });
         };
 
-        renderToCanvas(leftPageNum, bookCanvasLeftRef.current);
-        renderToCanvas(leftPageNum + 1, bookCanvasRightRef.current);
-        setLoading(false);
+        const left = Math.max(1, leftPageNum);
+        pdfDoc.getPage(left).then((page) => {
+            const wide = isWidePdfPage(page.getViewport({ scale: 1.0 }));
+            bookWideSpreadRef.current = wide;
+            setBookWideSpread(wide);
+
+            const tasks = [renderToCanvas(left, bookCanvasLeftRef.current)];
+            if (wide) {
+                tasks.push(renderToCanvas(0, bookCanvasRightRef.current));
+            } else {
+                tasks.push(renderToCanvas(left + 1, bookCanvasRightRef.current));
+            }
+            Promise.all(tasks).finally(() => setLoading(false));
+        });
     }, [pdfDoc]);
 
     // ─── Scroll mode: render all pages ───
     const renderAllPages = useCallback((currentScale) => {
         if (!pdfDoc) return;
 
-        const renderQueue = [];
-        for (let i = 1; i <= pdfDoc.numPages; i++) {
-            renderQueue.push(i);
-        }
-
-        const renderNext = (idx) => {
-            if (idx >= renderQueue.length) {
+        const totalPages = pdfDoc.numPages;
+        const renderNext = (idx, retries = 0) => {
+            if (idx >= totalPages) {
                 setLoading(false);
                 return;
             }
-            const pgNum = renderQueue[idx];
-            const canvas = scrollCanvasRefs.current[pgNum - 1];
-            if (!canvas) { renderNext(idx + 1); return; }
+            const pgNum = idx + 1;
+            const canvas = scrollCanvasRefs.current[idx];
+            if (!canvas) {
+                if (retries < 30) {
+                    requestAnimationFrame(() => renderNext(idx, retries + 1));
+                } else {
+                    renderNext(idx + 1, 0);
+                }
+                return;
+            }
 
             pdfDoc.getPage(pgNum).then((page) => {
                 const viewport = page.getViewport({ scale: currentScale });
@@ -199,6 +337,11 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
 
     // ─── Load PDF ───
     useEffect(() => {
+        autoFitDone.current = false;
+        setLoading(true);
+        setPdfDoc(null);
+        setNumPages(0);
+
         const loadingTask = pdfjsLib.getDocument(`/comics/${comic.id}/serve`);
         loadingTask.promise.then((pdf) => {
             setPdfDoc(pdf);
@@ -212,22 +355,48 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
     // ─── Trigger rendering based on view mode ───
     useEffect(() => {
         if (!pdfDoc) return;
-        setLoading(true);
 
-        if (viewMode === 'single') {
-            renderPage(pageNum, scale);
-        } else if (viewMode === 'book') {
-            // In book mode, align to odd page (left page of a spread)
-            const leftPage = pageNum % 2 === 1 ? pageNum : pageNum - 1;
-            renderBookPages(Math.max(1, leftPage), scale);
-        } else if (viewMode === 'scroll') {
-            renderAllPages(scale);
-        }
-    }, [pdfDoc, pageNum, scale, viewMode, renderPage, renderBookPages, renderAllPages]);
+        let cancelled = false;
+
+        const runRender = async () => {
+            setLoading(true);
+
+            // Wait for layout so container has dimensions (mobile flex can lag one frame)
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            if (cancelled) return;
+
+            let renderScale = scale;
+            if (!autoFitDone.current) {
+                const fitPage = effectiveViewMode === 'scroll' ? 1 : pageNum;
+                const fitScale = await computeFitScale(fitPage);
+                if (cancelled) return;
+                if (fitScale !== null) {
+                    autoFitDone.current = true;
+                    if (Math.abs(fitScale - scale) > 0.01) {
+                        setScale(fitScale);
+                        return;
+                    }
+                    renderScale = fitScale;
+                }
+            }
+
+            if (effectiveViewMode === 'single') {
+                renderPage(pageNum, renderScale);
+            } else if (effectiveViewMode === 'book') {
+                const leftPage = pageNum % 2 === 1 ? pageNum : pageNum - 1;
+                renderBookPages(Math.max(1, leftPage), renderScale);
+            } else if (effectiveViewMode === 'scroll') {
+                renderAllPages(renderScale);
+            }
+        };
+
+        runRender();
+        return () => { cancelled = true; };
+    }, [pdfDoc, pageNum, scale, effectiveViewMode, isMobile, isPortrait, chromeVisible, renderPage, renderBookPages, renderAllPages, computeFitScale]);
 
     // ─── IntersectionObserver for scroll mode page tracking ───
     useEffect(() => {
-        if (viewMode !== 'scroll' || !pdfDoc) return;
+        if (effectiveViewMode !== 'scroll' || !pdfDoc) return;
 
         // Slight delay to allow canvases to render
         const timeout = setTimeout(() => {
@@ -262,7 +431,7 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
             clearTimeout(timeout);
             if (observerRef.current) observerRef.current.disconnect();
         };
-    }, [viewMode, pdfDoc, numPages]);
+    }, [effectiveViewMode, pdfDoc, numPages]);
 
     // Keyboard navigation
     useEffect(() => {
@@ -272,11 +441,10 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [pageNum, numPages, viewMode]);
+    }, [pageNum, numPages, effectiveViewMode]);
 
-    // Touch swipe support
+    // Touch: swipe to turn pages, tap edges for prev/next, tap center to toggle chrome
     useEffect(() => {
-        if (viewMode === 'scroll') return; // scroll mode uses native scrolling
         const el = scrollRef.current;
         if (!el) return;
 
@@ -297,7 +465,28 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
             const deltaY = touch.clientY - touchStartRef.current.y;
             const elapsed = Date.now() - touchStartRef.current.time;
 
-            if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5 && elapsed < 500) {
+            // Tap detection
+            if (Math.abs(deltaX) < 12 && Math.abs(deltaY) < 12 && elapsed < 350) {
+                if (isMobile) {
+                    const rect = el.getBoundingClientRect();
+                    const relX = (touch.clientX - rect.left) / rect.width;
+                    if (effectiveViewMode === 'scroll') {
+                        setChromeVisible((v) => !v);
+                    } else if (relX < 0.28) {
+                        goPage(-1);
+                    } else if (relX > 0.72) {
+                        goPage(1);
+                    } else {
+                        setChromeVisible((v) => !v);
+                    }
+                }
+                touchStartRef.current = null;
+                return;
+            }
+
+            // Swipe (single/book mode only)
+            if (effectiveViewMode !== 'scroll' &&
+                Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5 && elapsed < 500) {
                 if (deltaX < 0) goPage(1);
                 else goPage(-1);
             }
@@ -311,7 +500,7 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
             el.removeEventListener('touchstart', handleTouchStart);
             el.removeEventListener('touchend', handleTouchEnd);
         };
-    }, [pageNum, numPages, viewMode]);
+    }, [pageNum, numPages, effectiveViewMode, isMobile]);
 
     // Sync page number to backend
     useEffect(() => {
@@ -368,18 +557,20 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
     }, [comic.id, pageNum]);
 
     const goPage = (offset) => {
-        const step = viewMode === 'book' ? 2 : 1;
+        const step = effectiveViewMode === 'book' && !bookWideSpreadRef.current ? 2 : 1;
         const newPage = pageNum + (offset * step);
         if (newPage >= 1 && newPage <= numPages) {
-            // Book mode: trigger flip animation and sound
-            if (viewMode === 'book') {
+            if (effectiveViewMode === 'book') {
                 setFlipDirection(offset > 0 ? 'forward' : 'backward');
                 playFlipSound();
                 setTimeout(() => setFlipDirection(null), 750);
             }
             setPageNum(newPage);
-            // In scroll mode, scroll to the target page canvas
-            if (viewMode === 'scroll') {
+            if (isMobile) {
+                setChromeVisible(false);
+                if (scrollRef.current) scrollRef.current.scrollTop = 0;
+            }
+            if (effectiveViewMode === 'scroll') {
                 const canvas = scrollCanvasRefs.current[newPage - 1];
                 if (canvas) {
                     canvas.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -392,7 +583,7 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
         const num = parseInt(val);
         if (num >= 1 && num <= numPages) {
             setPageNum(num);
-            if (viewMode === 'scroll') {
+            if (effectiveViewMode === 'scroll') {
                 const canvas = scrollCanvasRefs.current[num - 1];
                 if (canvas) {
                     canvas.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -404,6 +595,12 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
     const zoom = (delta) => {
         setScale(prev => Math.max(0.5, Math.min(3.0, prev + delta)));
     };
+
+    const fitToScreen = useCallback(async () => {
+        autoFitDone.current = false;
+        const fitScale = await computeFitScale(pageNum);
+        if (fitScale !== null) setScale(fitScale);
+    }, [computeFitScale, pageNum]);
 
     // ─── Bookmark Handlers ───
     const handleAddBookmark = () => {
@@ -478,11 +675,11 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
     );
 
     return (
-        <div ref={readerContainerRef} className="fixed inset-0 z-[200] bg-[#0a0a0f] flex flex-col animate-fadeIn font-['DM_Sans']">
+        <div ref={readerContainerRef} className="fixed inset-0 z-[200] bg-[#0a0a0f] flex flex-col animate-fadeIn font-['DM_Sans'] cv-reader-safe-top">
             <Head title={comic.title} />
             
             {/* Top Toolbar */}
-            <div className="cv-bar flex-shrink-0 bg-[#0a0a0f]/97 border-b border-white/7 backdrop-blur-md">
+            <div className={`cv-bar flex-shrink-0 bg-[#0a0a0f]/97 border-b border-white/7 backdrop-blur-md transition-all duration-300 ease-out ${isMobile && !chromeVisible ? '-translate-y-full opacity-0 pointer-events-none absolute inset-x-0 top-0 z-10' : ''}`}>
                 {/* Row 1: Back, Title, Menu */}
                 <div className="flex items-center justify-between px-3 sm:px-5 h-12 sm:h-14 gap-2">
                     <div className="cv-bar-left flex items-center gap-2 sm:gap-3.5 flex-1 min-w-0">
@@ -539,8 +736,8 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
                         </div>
                     </div>
 
-                    {/* Page nav — always visible */}
-                    <div className="flex items-center gap-1.5 sm:gap-2.5">
+                    {/* Page nav — desktop/tablet (mobile uses bottom bar) */}
+                    <div className="hidden sm:flex items-center gap-1.5 sm:gap-2.5">
                         <button 
                             className="cv-nav-btn w-8 h-8 sm:w-9 sm:h-9 bg-white/6 border border-white/10 rounded-lg text-[#f0f0f5] flex items-center justify-center cursor-pointer transition-colors hover:bg-white/13 disabled:opacity-30 disabled:cursor-default" 
                             onClick={() => goPage(-1)} 
@@ -653,6 +850,52 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
                                 )}
                             </div>
                         )}
+                        {read_lists?.length > 0 && (
+                            <div className="relative">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowReadListMenu(!showReadListMenu);
+                                        setShowShelfMenu(false);
+                                    }}
+                                    className="cv-nav-btn flex h-8.5 cursor-pointer items-center justify-center rounded-lg border border-sky-500/30 bg-sky-500/20 px-3 text-[11px] font-bold uppercase tracking-widest text-sky-300 transition-colors hover:bg-sky-500/30"
+                                >
+                                    + Read list
+                                </button>
+                                {showReadListMenu && (
+                                    <div className="absolute right-0 z-[210] mt-2 min-w-[200px] rounded-xl border border-white/10 bg-[#16161f] py-2 shadow-2xl animate-slideDown">
+                                        {read_lists.map((list) => (
+                                            <button
+                                                key={list.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    setShowReadListMenu(false);
+                                                    router.post(
+                                                        route('lists.attach', list.id),
+                                                        { comic_id: comic.hash_id },
+                                                        {
+                                                            preserveScroll: true,
+                                                            onSuccess: () => toast.success(`Added to ${list.name}`),
+                                                        },
+                                                    );
+                                                }}
+                                                className="w-full px-4 py-2.5 text-left text-[13px] text-[#a0a0b8] transition-colors hover:bg-white/5 hover:text-white"
+                                            >
+                                                {list.name}
+                                            </button>
+                                        ))}
+                                        <div className="my-1 border-t border-white/10" />
+                                        <Link
+                                            href={route('lists.index')}
+                                            className="block px-4 py-2 text-[12px] text-[#e8003d] hover:underline"
+                                            onClick={() => setShowReadListMenu(false)}
+                                        >
+                                            Manage lists →
+                                        </Link>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                         {(comic.ai_summary || (comic.tags && comic.tags.length > 0)) && (
                             <button 
                                 onClick={() => setShowAIInfo(!showAIInfo)}
@@ -685,18 +928,9 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
                             </button>
                             <button 
-                                onClick={() => {
-                                    const container = scrollRef.current;
-                                    if (container && pdfDoc) {
-                                        pdfDoc.getPage(pageNum).then(page => {
-                                            const viewport = page.getViewport({ scale: 1.0 });
-                                            const fitScale = (container.clientWidth - 40) / viewport.width;
-                                            setScale(Math.min(3.0, Math.max(0.5, fitScale)));
-                                        });
-                                    }
-                                }}
+                                onClick={fitToScreen}
                                 className="w-8 h-8 rounded-lg flex items-center justify-center text-[#8888a0] hover:text-white hover:bg-white/10 transition-colors"
-                                title="Fit to Width"
+                                title="Fit to Screen"
                             >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
                             </button>
@@ -836,14 +1070,57 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
                                         </div>
                                     </>
                                 )}
+                                {read_lists?.length > 0 && (
+                                    <>
+                                        <div className="border-t border-white/7 my-1" />
+                                        <div className="px-4 py-2 text-[10px] text-[#8888a0] font-bold uppercase tracking-wider">Read list</div>
+                                        <div className="max-h-[150px] overflow-y-auto no-scrollbar">
+                                            {read_lists.map((list) => (
+                                                <button
+                                                    key={list.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setShowMobileMenu(false);
+                                                        router.post(
+                                                            route('lists.attach', list.id),
+                                                            { comic_id: comic.hash_id },
+                                                            {
+                                                                preserveScroll: true,
+                                                                onSuccess: () => toast.success(`Added to ${list.name}`),
+                                                            },
+                                                        );
+                                                    }}
+                                                    className="w-full text-left px-4 py-2.5 text-[13px] text-[#a0a0b8] hover:bg-white/5 hover:text-white transition-colors pl-6"
+                                                >
+                                                    {list.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <Link
+                                            href={route('lists.index')}
+                                            className="block px-4 py-2 text-[12px] text-[#e8003d]"
+                                            onClick={() => setShowMobileMenu(false)}
+                                        >
+                                            Manage lists →
+                                        </Link>
+                                    </>
+                                )}
 
                                 <div className="border-t border-white/7 my-1" />
+                                <button
+                                    type="button"
+                                    onClick={() => { fitToScreen(); setShowMobileMenu(false); }}
+                                    className="w-full text-left px-4 py-2.5 text-[13px] text-[#a0a0b8] hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2"
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                                    Fit to screen
+                                </button>
                                 <div className="flex items-center justify-between px-4 py-2">
                                     <span className="text-[12px] text-[#8888a0] font-medium">Zoom</span>
                                     <div className="flex items-center gap-2">
-                                        <button className="w-8 h-8 bg-white/6 border border-white/10 rounded-lg text-[#f0f0f5] flex items-center justify-center" onClick={() => zoom(-0.1)}>-</button>
+                                        <button type="button" className="w-9 h-9 bg-white/6 border border-white/10 rounded-lg text-[#f0f0f5] flex items-center justify-center" onClick={() => zoom(-0.1)}>-</button>
                                         <span className="text-[12px] text-white/70 w-10 text-center">{Math.round(scale * 100)}%</span>
-                                        <button className="w-8 h-8 bg-white/6 border border-white/10 rounded-lg text-[#f0f0f5] flex items-center justify-center" onClick={() => zoom(0.1)}>+</button>
+                                        <button type="button" className="w-9 h-9 bg-white/6 border border-white/10 rounded-lg text-[#f0f0f5] flex items-center justify-center" onClick={() => zoom(0.1)}>+</button>
                                     </div>
                                 </div>
                             </div>
@@ -851,6 +1128,38 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
                     </div>
                 </div>
             </div>
+
+            {similar_comics?.length > 0 && !isMobile && (
+                <div className="flex-shrink-0 border-b border-white/5 bg-[#07070f]/95 px-3 py-2 backdrop-blur-md">
+                    <div className="mx-auto flex max-w-5xl touch-pan-x items-center gap-3 overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch] [scrollbar-width:thin]">
+                        <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.2em] text-[#8888a0]" id="similar-strip-label">
+                            Similar
+                        </span>
+                        <ul className="flex gap-3" role="list" aria-labelledby="similar-strip-label">
+                            {similar_comics.map((c) => (
+                                <li key={c.id} className="shrink-0 w-[92px] sm:w-[104px]">
+                                    <Link
+                                        href={route('comics.show', c.id)}
+                                        className="group block focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e8003d] rounded-lg"
+                                    >
+                                        <div className="relative aspect-[3/4] overflow-hidden rounded-lg border border-white/10 bg-[#0a0a12] shadow-md transition group-hover:border-[#e8003d]/40">
+                                            <img
+                                                src={c.thumbnail ? `/thumbs/${c.thumbnail}` : '/img/no-thumb.jpg'}
+                                                alt=""
+                                                className="h-full w-full object-cover"
+                                                loading="lazy"
+                                            />
+                                        </div>
+                                        <p className="mt-1 line-clamp-2 text-[10px] font-medium leading-tight text-[#7070a0] transition group-hover:text-white">
+                                            {c.title}
+                                        </p>
+                                    </Link>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                </div>
+            )}
 
             {/* AI Info Panel */}
             {showAIInfo && (comic.ai_summary || comic.tags) && (
@@ -890,15 +1199,17 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
                 </div>
             )}
 
-            {/* View mode indicator for mobile */}
-            <div className="sm:hidden text-center text-[11px] text-[#55556a] py-1.5 bg-white/3 border-b border-white/5">
-                {viewMode === 'single' && '← Swipe left/right to change pages →'}
-                {viewMode === 'scroll' && '↕ Scroll through all pages'}
-                {viewMode === 'book' && '← Swipe to turn pages (2 at a time) →'}
-            </div>
+            {/* View mode hint for mobile (auto-dismisses) */}
+            {isMobile && showSwipeHint && chromeVisible && (
+                <div className="text-center text-[11px] text-[#55556a] py-1.5 bg-white/3 border-b border-white/5 animate-fadeIn">
+                    {effectiveViewMode === 'single' && 'Tap sides or swipe to turn pages · tap center to hide controls'}
+                    {effectiveViewMode === 'scroll' && '↕ Scroll through pages · tap to show/hide controls'}
+                    {effectiveViewMode === 'book' && '← Swipe to turn pages →'}
+                </div>
+            )}
 
             {/* ─── MAIN CONTENT AREA WITH SIDEBAR ─── */}
-            <div className="flex flex-1 overflow-hidden">
+            <div className="flex flex-1 min-h-0 overflow-hidden">
                 {/* Bookmark Sidebar */}
                 <div className={`bg-[#0a0a0f] border-r border-white/7 flex flex-col transition-all duration-300 ease-in-out flex-shrink-0 ${showBookmarks ? 'w-64 sm:w-72' : 'w-0'} overflow-hidden`}>
                     <div className="flex items-center justify-between px-4 py-3 border-b border-white/7 flex-shrink-0">
@@ -947,7 +1258,14 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
                 </div>
 
                 {/* Reading Area */}
-                <div ref={scrollRef} className="cv-scroll flex-1 overflow-auto flex flex-col items-center p-2 sm:p-7 bg-[#0d0d14] scroll-smooth relative">
+                <div
+                    ref={scrollRef}
+                    className={`cv-scroll flex-1 min-h-0 flex flex-col items-center p-1 sm:p-7 bg-[#0d0d14] relative ${
+                        (isMobile && effectiveViewMode === 'single' && isPortrait) || effectiveViewMode === 'book'
+                            ? 'overflow-hidden justify-center'
+                            : 'overflow-auto scroll-smooth'
+                    } ${isMobile && chromeVisible ? 'pb-20' : ''}`}
+                >
                     
                     {/* Bookmark popover */}
                     {showBookmarkPopover && (
@@ -983,12 +1301,12 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
                     )}
 
                     {/* Single Page Mode */}
-                    {viewMode === 'single' && (
-                        <canvas ref={canvasRef} className="block shadow-[0_8px_40px_rgba(0,0,0,0.7)] rounded-sm max-w-full" />
+                    {effectiveViewMode === 'single' && (
+                        <canvas ref={canvasRef} className="block max-h-full max-w-full shadow-[0_8px_40px_rgba(0,0,0,0.7)] rounded-sm" />
                     )}
 
                     {/* Scroll Mode - All pages stacked */}
-                    {viewMode === 'scroll' && pdfDoc && (
+                    {effectiveViewMode === 'scroll' && pdfDoc && (
                         <div className="flex flex-col items-center gap-4 w-full">
                             {Array.from({ length: numPages }, (_, i) => (
                                 <div key={i} className="relative w-full flex justify-center">
@@ -1006,41 +1324,36 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
                     )}
 
                     {/* Book Mode - Realistic page flip */}
-                    {viewMode === 'book' && (
-                        <div className="book-container" style={{ perspective: '1800px', perspectiveOrigin: '50% 50%' }}>
-                            {/* Left page */}
-                            <div className="book-page book-page-left">
-                                <canvas 
-                                    ref={bookCanvasLeftRef} 
-                                    className="block max-h-full max-w-full" 
-                                    style={{ objectFit: 'contain' }}
-                                />
-                                {/* Inner spine shadow */}
-                                <div className="absolute right-0 top-0 bottom-0 w-8 pointer-events-none" 
-                                     style={{ background: 'linear-gradient(to left, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.08) 40%, transparent 100%)' }} />
-                                {/* Page edge highlight */}
-                                <div className="absolute right-0 top-0 bottom-0 w-px bg-white/10 pointer-events-none" />
+                    {effectiveViewMode === 'book' && (
+                        <div
+                            className={`book-container ${bookWideSpread ? 'book-container-wide' : ''}`}
+                            style={{ perspective: '1800px', perspectiveOrigin: '50% 50%' }}
+                        >
+                            <div className={`book-page book-page-left ${bookWideSpread ? 'book-page-single' : ''}`}>
+                                <canvas ref={bookCanvasLeftRef} className="book-canvas" />
+                                {!bookWideSpread && (
+                                    <>
+                                        <div className="absolute right-0 top-0 bottom-0 w-6 pointer-events-none"
+                                             style={{ background: 'linear-gradient(to left, rgba(0,0,0,0.2) 0%, transparent 100%)' }} />
+                                        <div className="absolute right-0 top-0 bottom-0 w-px bg-white/10 pointer-events-none" />
+                                    </>
+                                )}
                             </div>
 
-                            {/* Spine */}
-                            <div className="book-spine" />
-
-                            {/* Right page */}
-                            <div className="book-page book-page-right">
-                                <canvas 
-                                    ref={bookCanvasRightRef} 
-                                    className="block max-h-full max-w-full" 
-                                    style={{ objectFit: 'contain' }}
-                                />
-                                {/* Inner spine shadow */}
-                                <div className="absolute left-0 top-0 bottom-0 w-8 pointer-events-none" 
-                                     style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.08) 40%, transparent 100%)' }} />
-                                {/* Page edge highlight */}
-                                <div className="absolute left-0 top-0 bottom-0 w-px bg-white/10 pointer-events-none" />
-                            </div>
+                            {!bookWideSpread && (
+                                <>
+                                    <div className="book-spine" />
+                                    <div className="book-page book-page-right">
+                                        <canvas ref={bookCanvasRightRef} className="book-canvas" />
+                                        <div className="absolute left-0 top-0 bottom-0 w-6 pointer-events-none"
+                                             style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.2) 0%, transparent 100%)' }} />
+                                        <div className="absolute left-0 top-0 bottom-0 w-px bg-white/10 pointer-events-none" />
+                                    </div>
+                                </>
+                            )}
 
                             {/* Flip overlay - appears during page turn */}
-                            {flipDirection && (
+                            {flipDirection && !bookWideSpread && (
                                 <div className={`book-flip-overlay ${flipDirection === 'forward' ? 'flip-forward' : 'flip-backward'}`}>
                                     <div className="book-flip-page">
                                         {/* Front face - page curl gradient */}
@@ -1057,17 +1370,42 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
                     <style>{`
                         .book-container {
                             display: flex;
-                            align-items: flex-start;
+                            align-items: center;
                             justify-content: center;
+                            width: 100%;
                             max-width: 100%;
-                            height: 100%;
+                            max-height: 100%;
+                            flex: 1;
+                            min-height: 0;
                             position: relative;
+                            gap: 0;
+                        }
+                        .book-container-wide {
+                            max-width: min(100%, 1200px);
                         }
                         .book-page {
                             position: relative;
-                            max-width: 48%;
+                            flex: 1 1 0;
+                            min-width: 0;
+                            max-width: calc(50% - 1px);
+                            max-height: 100%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            overflow: hidden;
                             box-shadow: 0 4px 30px rgba(0,0,0,0.4);
                             background: #1a1a24;
+                        }
+                        .book-page-single {
+                            flex: 1 1 auto;
+                            max-width: 100%;
+                        }
+                        .book-canvas {
+                            display: block;
+                            width: 100%;
+                            height: auto;
+                            max-height: 100%;
+                            object-fit: contain;
                         }
                         .book-page-left {
                             border-radius: 3px 0 0 3px;
@@ -1078,11 +1416,10 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
                             transform-origin: left center;
                         }
                         .book-spine {
-                            width: 3px;
+                            width: 2px;
                             align-self: stretch;
-                            background: linear-gradient(to right, #0a0a0f, #1a1a24 40%, #0a0a0f);
-                            box-shadow: 0 0 15px rgba(0,0,0,0.8);
                             flex-shrink: 0;
+                            background: linear-gradient(to right, #0a0a0f, #2a2a34 50%, #0a0a0f);
                         }
 
                         /* ─── Flip overlay ─── */
@@ -1181,6 +1518,57 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
                     `}</style>
                 </div>
             </div>
+
+            {/* Mobile bottom navigation — thumb-friendly page controls */}
+            {isMobile && (
+                <div
+                    className={`fixed inset-x-0 bottom-0 z-[205] border-t border-white/8 bg-[#0a0a0f]/95 backdrop-blur-xl cv-reader-safe-bottom transition-transform duration-300 ease-out ${chromeVisible ? 'translate-y-0' : 'translate-y-full'}`}
+                >
+                    <div className="flex items-center justify-between gap-2 px-3 py-2">
+                        <button
+                            type="button"
+                            className="flex min-h-11 min-w-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-white/6 border border-white/10 text-[#f0f0f5] transition-colors active:bg-white/13 disabled:opacity-30"
+                            onClick={() => goPage(-1)}
+                            disabled={pageNum <= 1}
+                            aria-label="Previous page"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+                            <span className="text-[12px] font-medium">Prev</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setChromeVisible(true)}
+                            className="flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-white/5 border border-white/10 px-4 text-[13px] font-semibold text-white tabular-nums"
+                            aria-label="Show controls"
+                        >
+                            {pageNum} / {numPages || '?'}
+                        </button>
+                        <button
+                            type="button"
+                            className="flex min-h-11 min-w-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-white/6 border border-white/10 text-[#f0f0f5] transition-colors active:bg-white/13 disabled:opacity-30"
+                            onClick={() => goPage(1)}
+                            disabled={pageNum >= numPages}
+                            aria-label="Next page"
+                        >
+                            <span className="text-[12px] font-medium">Next</span>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6" /></svg>
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Minimal page pill when chrome is hidden */}
+            {isMobile && !chromeVisible && (
+                <button
+                    type="button"
+                    onClick={() => setChromeVisible(true)}
+                    className="fixed left-1/2 z-[205] -translate-x-1/2 rounded-full border border-white/15 bg-[#0a0a0f]/85 px-4 py-2 text-[12px] font-semibold text-white/90 shadow-lg backdrop-blur-md active:scale-95 transition-transform"
+                    style={{ bottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
+                    aria-label="Show reading controls"
+                >
+                    {pageNum} / {numPages || '?'}
+                </button>
+            )}
         </div>
     );
 }

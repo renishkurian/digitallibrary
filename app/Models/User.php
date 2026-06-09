@@ -38,6 +38,11 @@ class User extends Authenticatable
         return $this->belongsToMany(Comic::class, 'comic_user_access');
     }
 
+    public function comicPlaylists()
+    {
+        return $this->hasMany(ComicPlaylist::class)->orderBy('sort_order');
+    }
+
     /**
      * The attributes that should be hidden for serialization.
      *

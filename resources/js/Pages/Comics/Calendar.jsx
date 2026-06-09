@@ -325,20 +325,24 @@ export default function Calendar({ comicsByDate, month, year, auth, magazines, c
                         </div>
                     </header>
 
-                    {/* Weekday strip */}
-                    <div className={`mb-3 grid grid-cols-7 gap-2 sm:gap-3 ${glassPanel} px-2 py-3 sm:px-4`}>
-                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                            <div
-                                key={day}
-                                className="text-center text-[10px] font-black uppercase tracking-[0.2em] text-[#6a6a82] sm:text-[11px]"
-                            >
-                                {day}
+                    <div className="-mx-1 min-w-0 overflow-x-auto overscroll-x-contain px-1 pb-1 [-webkit-overflow-scrolling:touch] sm:mx-0 sm:overflow-visible sm:px-0 sm:pb-0">
+                        <div className="min-w-[17.5rem]">
+                            {/* Weekday strip */}
+                            <div className={`mb-3 grid grid-cols-7 gap-2 sm:gap-3 ${glassPanel} px-2 py-3 sm:px-4`}>
+                                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                                    <div
+                                        key={day}
+                                        className="text-center text-[10px] font-black uppercase tracking-[0.2em] text-[#6a6a82] sm:text-[11px]"
+                                    >
+                                        {day}
+                                    </div>
+                                ))}
                             </div>
-                        ))}
-                    </div>
 
-                    {/* Grid */}
-                    <div className="grid grid-cols-7 gap-2 sm:gap-3">{renderDays()}</div>
+                            {/* Grid */}
+                            <div className="grid grid-cols-7 gap-2 sm:gap-3">{renderDays()}</div>
+                        </div>
+                    </div>
 
                     <div className="mt-8 flex justify-center">
                         <button

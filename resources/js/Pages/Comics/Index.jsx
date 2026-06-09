@@ -40,7 +40,7 @@ const CheckIcon = () => (
     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5"><polyline points="20 6 9 17 4 12" /></svg>
 );
 
-export default function Index({ comics, filters, auth, shelves, categories, recentlyRead }) {
+export default function Index({ comics, filters, auth, shelves, categories, recentlyRead, discoveryFacets = { series: [], publishers: [], languages: [] } }) {
     const [showSidebar, setShowSidebar] = useState(
         typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
     );
@@ -54,20 +54,38 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
         return () => window.removeEventListener('resize', handleResize);
     }, [showSidebar]);
 
-    const hasActiveFilters = filters.status || filters.shelf || filters.category || filters.date_from || filters.date_to || filters.personal || filters.shared || filters.hidden;
+    const hasActiveFilters =
+        filters.status ||
+        filters.shelf ||
+        filters.category ||
+        filters.date_from ||
+        filters.date_to ||
+        filters.personal ||
+        filters.shared ||
+        filters.hidden ||
+        filters.series ||
+        filters.publisher ||
+        filters.language ||
+        filters.rating_min ||
+        filters.rating_max ||
+        filters.year_from ||
+        filters.year_to;
 
+    const applyDiscovery = (patch) => {
+        router.get(route('comics.index'), { ...filters, ...patch }, { preserveState: true });
+    };
     return (
         <ComicLayout auth={auth}>
             <Head title="All Comics" />
 
             {/* ── PAGE HEADER ── */}
-            <div className="pt-6 pb-5 border-b border-white/[0.06] mb-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="mb-6 min-w-0 border-b border-white/[0.06] pt-6 pb-5">
+                <div className="flex flex-col gap-5 sm:flex-row sm:items-start lg:items-center lg:justify-between lg:gap-4">
                     {/* Title + filter toggle */}
-                    <div className="flex items-center gap-4">
+                    <div className="flex min-w-0 flex-wrap items-center gap-3 sm:gap-4">
                         <button
                             onClick={() => setShowSidebar(!showSidebar)}
-                            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-semibold tracking-[1.5px] uppercase transition-all duration-200 border ${
+                            className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[1.5px] transition-all duration-200 ${
                                 showSidebar
                                     ? 'bg-[#e8003d] text-white border-[#e8003d] shadow-[0_2px_16px_rgba(232,0,61,0.28)]'
                                     : 'bg-white/[0.04] text-[#6868a0] border-white/[0.09] hover:text-white hover:border-white/[0.18] hover:bg-white/[0.07]'
@@ -76,16 +94,16 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
                             <FilterIcon />
                             Filters
                         </button>
-                        <div>
-                            <h1 className="font-['Bebas_Neue'] text-[30px] sm:text-[36px] tracking-[3px] uppercase text-white leading-none">
+                        <div className="min-w-0 flex-1 sm:flex-none">
+                            <h1 className="break-words font-['Bebas_Neue'] text-[clamp(1.625rem,5vw,2.25rem)] leading-none uppercase tracking-[3px] text-white sm:text-[36px]">
                                 Library <span className="text-[#e8003d]">Archive</span>
                             </h1>
                         </div>
                     </div>
 
                     {/* Stats + view toggles */}
-                    <div className="flex items-center gap-4 sm:gap-5">
-                        <div className="flex items-center gap-3 text-[12px]">
+                    <div className="flex w-full flex-wrap items-center gap-4 sm:w-auto lg:justify-end">
+                        <div className="flex flex-wrap items-center gap-3 text-[12px]">
                             <div className="flex items-center gap-1.5">
                                 <span className="text-[20px] font-['Bebas_Neue'] text-[#e8003d] leading-none">{comics.total}</span>
                                 <span className="text-[#4a4a6a] font-semibold tracking-widest uppercase">Comics</span>
@@ -98,7 +116,7 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
                         </div>
 
                         {/* View mode toggle */}
-                        <div className="flex items-center bg-white/[0.04] border border-white/[0.08] rounded-xl p-1 gap-0.5">
+                        <div className="flex items-center gap-0.5 rounded-xl border border-white/[0.08] bg-white/[0.04] p-1">
                             {[
                                 { mode: 'grid', Icon: GridIcon, title: 'Grid' },
                                 { mode: 'list', Icon: ListIcon, title: 'List' },
@@ -108,7 +126,8 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
                                     key={mode}
                                     onClick={() => setViewMode(mode)}
                                     title={`${title} View`}
-                                    className={`p-2 rounded-lg transition-all duration-200 ${
+                                    type="button"
+                                    className={`inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg transition-all duration-200 sm:min-h-10 sm:min-w-10 sm:p-2 ${
                                         viewMode === mode
                                             ? 'bg-[#e8003d] text-white shadow-[0_1px_8px_rgba(232,0,61,0.4)]'
                                             : 'text-[#6868a0] hover:text-white hover:bg-white/[0.05]'
@@ -143,6 +162,31 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
                         {(filters.date_from || filters.date_to) && (
                             <FilterChip label={`${filters.date_from || '…'} → ${filters.date_to || '…'}`} onRemove={() => router.get(route('comics.index', { ...filters, date_from: null, date_to: null }), {}, { preserveState: true })} />
                         )}
+                        {filters.series && (
+                            <FilterChip label={`Series: ${filters.series}`} onRemove={() => router.get(route('comics.index', { ...filters, series: null }), {}, { preserveState: true })} />
+                        )}
+                        {filters.publisher && (
+                            <FilterChip label={`Publisher: ${filters.publisher}`} onRemove={() => router.get(route('comics.index', { ...filters, publisher: null }), {}, { preserveState: true })} />
+                        )}
+                        {filters.language && (
+                            <FilterChip label={`Lang: ${filters.language}`} onRemove={() => router.get(route('comics.index', { ...filters, language: null }), {}, { preserveState: true })} />
+                        )}
+                        {(filters.rating_min || filters.rating_max) && (
+                            <FilterChip
+                                label={`Rating ${filters.rating_min || '…'}–${filters.rating_max || '…'}`}
+                                onRemove={() =>
+                                    router.get(route('comics.index', { ...filters, rating_min: null, rating_max: null }), {}, { preserveState: true })
+                                }
+                            />
+                        )}
+                        {(filters.year_from || filters.year_to) && (
+                            <FilterChip
+                                label={`Years ${filters.year_from || '…'}–${filters.year_to || '…'}`}
+                                onRemove={() =>
+                                    router.get(route('comics.index', { ...filters, year_from: null, year_to: null }), {}, { preserveState: true })
+                                }
+                            />
+                        )}
                     </div>
                 )}
             </div>
@@ -163,12 +207,15 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
                         </Link>
                     </div>
 
-                    <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide" style={{ scrollbarWidth: 'none' }}>
+                    <div
+                        className="flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain pb-2 [-webkit-overflow-scrolling:touch] scrollbar-hide motion-reduce:snap-none"
+                        style={{ scrollbarWidth: 'none' }}
+                    >
                         {recentlyRead.map(comic => (
                             <Link
                                 key={comic.id}
                                 href={route('comics.show', comic.id)}
-                                className="group flex flex-col gap-2 shrink-0 w-[120px] sm:w-[130px]"
+                                className="group flex w-[116px] shrink-0 snap-start flex-col gap-2 sm:w-[130px]"
                             >
                                 <div className="relative aspect-[3/4] rounded-xl overflow-hidden border border-white/[0.07] group-hover:border-[#e8003d]/40 group-hover:shadow-[0_8px_30px_rgba(232,0,61,0.15)] transition-all duration-300 group-hover:-translate-y-1">
                                     <img
@@ -204,11 +251,14 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
             )}
 
             {/* ── MAIN LAYOUT ── */}
-            <div className={`flex gap-8 lg:gap-10 transition-all duration-300`}>
+            <div className="flex min-w-0 flex-col gap-8 transition-all duration-300 lg:flex-row lg:gap-10">
 
                 {/* ── SIDEBAR ── */}
                 <aside className={`w-full lg:w-[240px] shrink-0 transition-all duration-300 ${showSidebar ? 'block' : 'hidden'}`}>
-                    <div className="lg:sticky lg:top-[80px] flex flex-col gap-2 max-h-[calc(100vh-100px)] overflow-y-auto pr-1 pb-4" style={{ scrollbarWidth: 'thin', scrollbarColor: '#e8003d transparent' }}>
+                    <div
+                        className="flex max-h-[min(70dvh,calc(100dvh-7.5rem))] flex-col gap-2 overflow-y-auto pb-4 pr-1 lg:sticky lg:top-[80px] lg:max-h-[calc(100vh-100px)]"
+                        style={{ scrollbarWidth: 'thin', scrollbarColor: '#e8003d transparent' }}
+                    >
 
                         {/* Status filter */}
                         <SidebarSection title="Status">
@@ -222,6 +272,205 @@ export default function Index({ comics, filters, auth, shelves, categories, rece
                                         <FilterPill href={route('comics.index', { ...filters, status: 'completed' })} active={filters.status === 'completed'}>Completed</FilterPill>
                                     </>
                                 )}
+                            </div>
+                        </SidebarSection>
+
+                        {auth.user && (
+                            <SidebarSection title="Smart views" subtitle="Saved progress filters">
+                                <p className="mb-2 text-[11px] leading-snug text-[#5a5a72]">
+                                    Same rules as status, grouped for quick discovery—not separate shelves.
+                                </p>
+                                <div className="flex flex-wrap gap-1.5">
+                                    <FilterPill
+                                        href={route('comics.index', { ...filters, status: 'unfinished' })}
+                                        active={filters.status === 'unfinished'}
+                                    >
+                                        Unfinished
+                                    </FilterPill>
+                                    <FilterPill
+                                        href={route('comics.index', { ...filters, status: 'completed' })}
+                                        active={filters.status === 'completed'}
+                                    >
+                                        Finished
+                                    </FilterPill>
+                                    <FilterPill
+                                        href={route('comics.index', { ...filters, status: 'currently_reading' })}
+                                        active={filters.status === 'currently_reading'}
+                                    >
+                                        In progress
+                                    </FilterPill>
+                                </div>
+                            </SidebarSection>
+                        )}
+
+                        <SidebarSection
+                            title="Metadata"
+                            subtitle="Series, publisher, language"
+                            action={
+                                (filters.series ||
+                                    filters.publisher ||
+                                    filters.language ||
+                                    filters.rating_min ||
+                                    filters.rating_max ||
+                                    filters.year_from ||
+                                    filters.year_to) && (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            applyDiscovery({
+                                                series: null,
+                                                publisher: null,
+                                                language: null,
+                                                rating_min: null,
+                                                rating_max: null,
+                                                year_from: null,
+                                                year_to: null,
+                                            })
+                                        }
+                                        className="text-[10px] text-[#e8003d] hover:text-[#ff4466] font-semibold uppercase tracking-wider transition-colors"
+                                    >
+                                        Clear
+                                    </button>
+                                )
+                            }
+                        >
+                            <div className="flex flex-col gap-3">
+                                <div>
+                                    <label htmlFor="flt-series" className="text-[10px] text-[#4a4a6a] uppercase tracking-wider font-semibold">
+                                        Series
+                                    </label>
+                                    <select
+                                        id="flt-series"
+                                        value={filters.series || ''}
+                                        onChange={(e) => applyDiscovery({ series: e.target.value || null })}
+                                        className="mt-1 w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-2.5 py-2 text-[12px] text-white focus:ring-1 focus:ring-[#e8003d]/50"
+                                    >
+                                        <option value="">Any series</option>
+                                        {discoveryFacets.series?.map((s) => (
+                                            <option key={s} value={s}>
+                                                {s}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label htmlFor="flt-publisher" className="text-[10px] text-[#4a4a6a] uppercase tracking-wider font-semibold">
+                                        Publisher
+                                    </label>
+                                    <select
+                                        id="flt-publisher"
+                                        value={filters.publisher || ''}
+                                        onChange={(e) => applyDiscovery({ publisher: e.target.value || null })}
+                                        className="mt-1 w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-2.5 py-2 text-[12px] text-white focus:ring-1 focus:ring-[#e8003d]/50"
+                                    >
+                                        <option value="">Any publisher</option>
+                                        {discoveryFacets.publishers?.map((s) => (
+                                            <option key={s} value={s}>
+                                                {s}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label htmlFor="flt-language" className="text-[10px] text-[#4a4a6a] uppercase tracking-wider font-semibold">
+                                        Language
+                                    </label>
+                                    <select
+                                        id="flt-language"
+                                        value={filters.language || ''}
+                                        onChange={(e) => applyDiscovery({ language: e.target.value || null })}
+                                        className="mt-1 w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-2.5 py-2 text-[12px] text-white focus:ring-1 focus:ring-[#e8003d]/50"
+                                    >
+                                        <option value="">Any</option>
+                                        {discoveryFacets.languages?.map((s) => (
+                                            <option key={s} value={s}>
+                                                {s}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label htmlFor="flt-rmin" className="text-[10px] text-[#4a4a6a] uppercase tracking-wider font-semibold">
+                                            Rating min
+                                        </label>
+                                        <input
+                                            id="flt-rmin"
+                                            type="number"
+                                            step="0.1"
+                                            min="0"
+                                            max="10"
+                                            placeholder="0"
+                                            value={filters.rating_min ?? ''}
+                                            onChange={(e) =>
+                                                applyDiscovery({
+                                                    rating_min: e.target.value === '' ? null : e.target.value,
+                                                })
+                                            }
+                                            className="mt-1 w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-2 text-[12px] text-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="flt-rmax" className="text-[10px] text-[#4a4a6a] uppercase tracking-wider font-semibold">
+                                            Rating max
+                                        </label>
+                                        <input
+                                            id="flt-rmax"
+                                            type="number"
+                                            step="0.1"
+                                            min="0"
+                                            max="10"
+                                            placeholder="10"
+                                            value={filters.rating_max ?? ''}
+                                            onChange={(e) =>
+                                                applyDiscovery({
+                                                    rating_max: e.target.value === '' ? null : e.target.value,
+                                                })
+                                            }
+                                            className="mt-1 w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-2 text-[12px] text-white"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label htmlFor="flt-yfrom" className="text-[10px] text-[#4a4a6a] uppercase tracking-wider font-semibold">
+                                            Year from
+                                        </label>
+                                        <input
+                                            id="flt-yfrom"
+                                            type="number"
+                                            min="1900"
+                                            max="2100"
+                                            placeholder="Year"
+                                            value={filters.year_from ?? ''}
+                                            onChange={(e) =>
+                                                applyDiscovery({
+                                                    year_from: e.target.value === '' ? null : e.target.value,
+                                                })
+                                            }
+                                            className="mt-1 w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-2 text-[12px] text-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="flt-yto" className="text-[10px] text-[#4a4a6a] uppercase tracking-wider font-semibold">
+                                            Year to
+                                        </label>
+                                        <input
+                                            id="flt-yto"
+                                            type="number"
+                                            min="1900"
+                                            max="2100"
+                                            placeholder="Year"
+                                            value={filters.year_to ?? ''}
+                                            onChange={(e) =>
+                                                applyDiscovery({
+                                                    year_to: e.target.value === '' ? null : e.target.value,
+                                                })
+                                            }
+                                            className="mt-1 w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-2 text-[12px] text-white"
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </SidebarSection>
 
@@ -469,11 +718,18 @@ function FilterChip({ label, onRemove }) {
     );
 }
 
-function SidebarSection({ title, children, action }) {
+function SidebarSection({ title, children, action, subtitle }) {
     return (
         <div className="bg-white/[0.025] border border-white/[0.06] rounded-2xl p-4">
-            <div className="flex items-center justify-between mb-3">
-                <span className="text-[10px] font-bold tracking-[2.5px] uppercase text-[#4a4a6a]">{title}</span>
+            <div className="flex items-start justify-between gap-2 mb-3">
+                <div className="min-w-0">
+                    <span className="text-[10px] font-bold tracking-[2.5px] uppercase text-[#4a4a6a]">{title}</span>
+                    {subtitle && (
+                        <p className="mt-1 text-[10px] font-medium normal-case tracking-normal text-[#55556a] leading-snug">
+                            {subtitle}
+                        </p>
+                    )}
+                </div>
                 {action}
             </div>
             {children}

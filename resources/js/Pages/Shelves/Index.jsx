@@ -16,7 +16,7 @@ export default function Index({ shelves }) {
         <ComicLayout>
             <Head title="Browse stacks" />
 
-            <div className="relative pb-10">
+            <div className="relative min-w-0 pb-10">
                 {/* subtle newsstand backdrop */}
                 <div
                     className="pointer-events-none absolute inset-0 -top-4 opacity-[0.07] motion-reduce:opacity-0"
@@ -35,13 +35,13 @@ export default function Index({ shelves }) {
                             <div className="pointer-events-none absolute -bottom-24 left-1/4 h-40 w-40 rounded-full bg-[#e8003d]/6 blur-3xl" aria-hidden />
 
                             <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-                                <div className="max-w-2xl">
+                                <div className="min-w-0 max-w-2xl">
                                     <p className="mb-2 inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.28em] text-[#e8003d]">
                                         <Sparkles className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
                                         ComicVault
                                     </p>
                                     <h1
-                                        className="text-[clamp(2rem,5vw,2.75rem)] leading-[0.95] tracking-[0.12em] text-white"
+                                        className="break-words text-[clamp(2rem,5vw,2.75rem)] leading-[0.95] tracking-[0.12em] text-white"
                                         style={{ fontFamily: "'Bebas Neue', sans-serif" }}
                                     >
                                         Browse{' '}

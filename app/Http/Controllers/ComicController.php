@@ -9,10 +9,12 @@ use App\Models\Shelf;
 use App\Models\Category;
 use App\Models\User;
 use App\Models\ReadingLog;
+use App\Models\ComicPlaylist;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
+use App\Services\ComicRecommendationService;
 
 class ComicController extends Controller
 {
@@ -28,6 +30,31 @@ class ComicController extends Controller
         // Search
         if ($request->filled('q')) {
             $query->search($request->q);
+        }
+
+        // Discovery filters (metadata / tags / series — used with unified search)
+        if ($request->filled('series')) {
+            $query->where('series', 'like', '%' . $request->series . '%');
+        }
+        if ($request->filled('publisher')) {
+            $query->where('publisher', 'like', '%' . $request->publisher . '%');
+        }
+        if ($request->filled('language')) {
+            $query->where('language', $request->language);
+        }
+        if ($request->filled('rating_min')) {
+            $query->whereNotNull('rating')->where('rating', '>=', (float) $request->rating_min);
+        }
+        if ($request->filled('rating_max')) {
+            $query->whereNotNull('rating')->where('rating', '<=', (float) $request->rating_max);
+        }
+        if ($request->filled('year_from')) {
+            $query->whereNotNull('published_date')
+                ->whereYear('published_date', '>=', (int) $request->year_from);
+        }
+        if ($request->filled('year_to')) {
+            $query->whereNotNull('published_date')
+                ->whereYear('published_date', '<=', (int) $request->year_to);
         }
 
         // Read/Unread/History/Status Filters (only for logged in users)
@@ -58,6 +85,11 @@ class ComicController extends Controller
                 $query->whereHas('readers', function ($q) use ($userId) {
                     $q->where('user_id', $userId)
                         ->whereColumn('last_read_page', '>=', 'comics.pages_count');
+                });
+            } elseif ($request->status === 'unfinished') {
+                $query->whereHas('readers', function ($q) use ($userId) {
+                    $q->where('user_id', $userId)
+                        ->whereColumn('last_read_page', '<', 'comics.pages_count');
                 });
             }
         }
@@ -189,7 +221,11 @@ class ComicController extends Controller
         return Inertia::render('Comics/Index', [
             'comics' => $comics,
             'recentlyRead' => $recentlyRead,
-            'filters' => $request->only(['q', 'status', 'shelf', 'category', 'personal', 'shared', 'hidden', 'date_from', 'date_to']),
+            'filters' => $request->only([
+                'q', 'status', 'shelf', 'category', 'personal', 'shared', 'hidden', 'date_from', 'date_to',
+                'series', 'publisher', 'language', 'rating_min', 'rating_max', 'year_from', 'year_to',
+            ]),
+            'discoveryFacets' => $this->discoveryFacetOptions(),
             'shelves' => Shelf::visible(Auth::user())->whereNull('parent_id')->with(['children' => fn($q) => $q->visible(Auth::user())])->orderBy('name')->get()->map(fn($s) => [
                 'id' => $s->hash_id,
                 'name' => ucfirst(str_replace('_', ' ', $s->name)),
@@ -307,6 +343,19 @@ class ComicController extends Controller
                 ->get(['id', 'page_number', 'note', 'created_at']);
         }
 
+        $readLists = [];
+        if (Auth::check()) {
+            $readLists = ComicPlaylist::query()
+                ->where('user_id', Auth::id())
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(fn (ComicPlaylist $p) => ['id' => $p->id, 'name' => $p->name])
+                ->values()
+                ->all();
+        }
+
+        $similar = app(ComicRecommendationService::class)->similar($comic, 10);
+
         return Inertia::render('Comics/Show', [
             'comic' => $comic,
             'last_read_page' => $lastReadPage,
@@ -314,7 +363,38 @@ class ComicController extends Controller
             'bookmarks' => $bookmarks,
             'prev_issue' => $prev ? ['id' => $prev->hash_id, 'title' => $prev->title] : null,
             'next_issue' => $next ? ['id' => $next->hash_id, 'title' => $next->title] : null,
+            'prev_comic' => $prev ? ['id' => $prev->hash_id, 'title' => $prev->title] : null,
+            'next_comic' => $next ? ['id' => $next->hash_id, 'title' => $next->title] : null,
+            'similar_comics' => $similar->map(fn (Comic $c) => [
+                'id' => $c->hash_id,
+                'title' => $c->title,
+                'thumbnail' => $c->thumbnail,
+                'series' => $c->series,
+            ])->values()->all(),
+            'read_lists' => $readLists,
         ]);
+    }
+
+    /**
+     * Distinct metadata values for discovery filter dropdowns (respects visibility rules).
+     *
+     * @return array{series: array<int, string>, publishers: array<int, string>, languages: array<int, string>}
+     */
+    protected function discoveryFacetOptions(): array
+    {
+        $base = Comic::query();
+        if (!Auth::check() || (!Auth::user()->is_admin && !Auth::user()->hasRole('admin'))) {
+            $base->visible(Auth::user());
+        }
+
+        return [
+            'series' => (clone $base)->whereNotNull('series')->where('series', '!=', '')
+                ->distinct()->orderBy('series')->limit(200)->pluck('series')->values()->all(),
+            'publishers' => (clone $base)->whereNotNull('publisher')->where('publisher', '!=', '')
+                ->distinct()->orderBy('publisher')->limit(150)->pluck('publisher')->values()->all(),
+            'languages' => (clone $base)->whereNotNull('language')->where('language', '!=', '')
+                ->distinct()->orderBy('language')->limit(50)->pluck('language')->values()->all(),
+        ];
     }
 
     public function addToPersonalShelf(Request $request, Comic $comic)

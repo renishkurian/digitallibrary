@@ -10,7 +10,7 @@ export default function Show({ shelf, children, comics, auth }) {
         <ComicLayout auth={auth} title={shelf.name}>
             <Head title={`${shelf.name} - Shelf`} />
             
-            <div className="flex flex-col gap-8">
+            <div className="flex min-w-0 flex-col gap-8">
                 <div className="shelf-header relative py-8 px-4 sm:py-12 sm:px-10 rounded-2xl sm:rounded-3xl overflow-hidden border border-white/7 bg-[#0d0d14]">
                     <div className="relative z-10 max-w-2xl">
                         <div className="flex items-center gap-3 mb-4 flex-wrap">
@@ -35,7 +35,7 @@ export default function Show({ shelf, children, comics, auth }) {
                                 </>
                             )}
                         </div>
-                        <h1 className="text-3xl sm:text-5xl font-['Bebas_Neue'] tracking-[2px] sm:tracking-[4px] text-white">
+                        <h1 className="break-words text-3xl sm:text-5xl font-['Bebas_Neue'] tracking-[2px] sm:tracking-[4px] text-white">
                             {shelf.name}
                         </h1>
                         <div className="flex items-center gap-4 mt-2">

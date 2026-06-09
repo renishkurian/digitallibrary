@@ -175,10 +175,20 @@ class Comic extends Model
 
     public function scopeSearch($query, $search)
     {
-        return $query->where(function ($q) use ($search) {
-            $q->where('title', 'like', '%' . $search . '%')
-                ->orWhere('ai_summary', 'like', '%' . $search . '%')
-                ->orWhereJsonContains('tags', $search);
+        $s = trim((string) $search);
+        if ($s === '') {
+            return $query;
+        }
+
+        return $query->where(function ($q) use ($s) {
+            $q->where('title', 'like', '%' . $s . '%')
+                ->orWhere('ai_summary', 'like', '%' . $s . '%')
+                ->orWhere('description', 'like', '%' . $s . '%')
+                ->orWhere('filename', 'like', '%' . $s . '%')
+                ->orWhere('author', 'like', '%' . $s . '%')
+                ->orWhere('series', 'like', '%' . $s . '%')
+                ->orWhere('publisher', 'like', '%' . $s . '%')
+                ->orWhere('tags', 'like', '%' . $s . '%');
         });
     }
 

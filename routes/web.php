@@ -8,21 +8,18 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\RolePermissionController;
 use App\Http\Controllers\Admin\DuplicateController;
+use App\Http\Controllers\ComicPlaylistController;
 use Illuminate\Support\Facades\Route;
-
-Route::get('/', function () {
-    return view('welcome');
-});
 
 Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
 
-Route::get('/', [ComicController::class, 'index'])->name('comics.index');
+Route::get('/', [ShelfController::class, 'index'])->name('shelves.index');
+Route::get('/library', [ComicController::class, 'index'])->name('comics.index');
 Route::get('/calendar', [ComicController::class, 'calendar'])->name('comics.calendar');
 Route::get('/comics/{comic}', [ComicController::class, 'show'])->name('comics.show');
 Route::get('/comics/{comic}/serve', [ComicController::class, 'serve'])->name('comics.serve');
 Route::get('/s/{id}', [ComicController::class, 'share'])->name('comics.shared');
 
-Route::get('/shelves', [ShelfController::class, 'index'])->name('shelves.index');
 Route::get('/shelves/{shelf}', [ShelfController::class, 'show'])->name('shelves.show');
 Route::get('/categories/{category:slug}', [CategoryController::class, 'show'])->name('categories.show');
 
@@ -31,6 +28,15 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
     Route::get('/reading-stats', [UserController::class, 'readingStats'])->name('reading-stats');
+
+    Route::get('/lists', [ComicPlaylistController::class, 'index'])->name('lists.index');
+    Route::post('/lists', [ComicPlaylistController::class, 'store'])->name('lists.store');
+    Route::get('/lists/{list}', [ComicPlaylistController::class, 'show'])->name('lists.show');
+    Route::patch('/lists/{list}', [ComicPlaylistController::class, 'update'])->name('lists.update');
+    Route::delete('/lists/{list}', [ComicPlaylistController::class, 'destroy'])->name('lists.destroy');
+    Route::post('/lists/{list}/comics', [ComicPlaylistController::class, 'attach'])->name('lists.attach');
+    Route::delete('/lists/{list}/comics/{comic}', [ComicPlaylistController::class, 'detach'])->name('lists.detach');
+    Route::post('/lists/{list}/reorder', [ComicPlaylistController::class, 'reorder'])->name('lists.reorder');
 
     Route::post('/comics/{comic}/read', [ComicController::class, 'toggleRead'])->name('comics.toggle-read');
     Route::post('/comics/{comic}/page', [ComicController::class, 'updateLastReadPage'])->name('comics.update-page');

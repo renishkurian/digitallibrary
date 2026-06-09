@@ -57,7 +57,7 @@ export default function ReadingStats({ auth, comicStats, dailyLogs }) {
         <ComicLayout auth={auth}>
             <Head title="Reading stats" />
 
-            <main className="relative isolate pb-24 [--rs-pad:1.25rem] sm:[--rs-pad:1.5rem]">
+            <main className="relative isolate min-w-0 overflow-x-hidden pb-24 [--rs-pad:1.25rem] sm:[--rs-pad:1.5rem]">
                 {/* Depth stack: mesh + noise + vignette */}
                 <div className="pointer-events-none fixed inset-0 -z-30 bg-[var(--bg)]" aria-hidden />
                 <div
@@ -81,7 +81,7 @@ export default function ReadingStats({ auth, comicStats, dailyLogs }) {
                 />
 
                 <div
-                    className="relative mx-auto max-w-[1200px] px-[var(--rs-pad)] pt-4"
+                    className="relative mx-auto min-w-0 w-full max-w-[1200px] px-[var(--rs-pad)] pt-4"
                     style={{ fontFamily: 'var(--font-body)' }}
                 >
                     {/* ── Hero bento ── */}
