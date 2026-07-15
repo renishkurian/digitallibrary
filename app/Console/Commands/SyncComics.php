@@ -400,7 +400,10 @@ class SyncComics extends Command
 
         // Dispatch AI jobs outside the transaction
         foreach ($this->toDispatchAI as $id) {
-            ProcessComicAIJob::dispatch($id);
+            $comic = Comic::find($id);
+            if ($comic) {
+                ProcessComicAIJob::dispatch($comic);
+            }
         }
 
         // Dispatch Thumbnail jobs outside the transaction

@@ -3,7 +3,6 @@
 namespace App\Jobs;
 
 use App\Models\Comic;
-use App\Services\AIService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -16,12 +15,13 @@ class ProcessComicAIJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    public $timeout = 30;
+
+    public $tries = 3;
+
     public $comic;
     public $userId;
 
-    /**
-     * Create a new job instance.
-     */
     public function __construct(Comic $comic, ?int $userId = null)
     {
         $this->comic = $comic;
@@ -29,50 +29,40 @@ class ProcessComicAIJob implements ShouldQueue
     }
 
     /**
-     * Execute the job.
+     * Spawn a detached process so Ollama can run as long as needed
+     * without being killed by the queue worker timeout.
      */
-    public function handle(AIService $aiService): void
+    public function handle(): void
     {
-        Log::info("Starting AI processing for comic: {$this->comic->id}");
+        $comicId = $this->comic->id;
+        $userFlag = $this->userId ? ' --user=' . (int) $this->userId : '';
+        $logFile = storage_path('logs/ai-process.log');
 
-        $baseDir = rtrim(config('comics.base_dir'), '/');
-        $comicPath = urldecode(ltrim($this->comic->path, '/'));
-        $fullPath = $baseDir . '/' . $comicPath;
+        $command = sprintf(
+            'nohup %s %s comics:process-ai %d%s >> %s 2>&1 &',
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg(base_path('artisan')),
+            $comicId,
+            $userFlag,
+            escapeshellarg($logFile)
+        );
 
-        if (!file_exists($fullPath)) {
-            Log::error("ProcessComicAIJob failed: File does not exist at {$fullPath}");
-            return;
-        }
+        Log::info("ProcessComicAIJob: spawning background AI processor for comic {$comicId}");
 
-        // Extract text from the first 10 pages using pdftotext
-        // '-' means output to stdout
-        $process = new Process(['pdftotext', '-f', '1', '-l', '10', $fullPath, '-']);
+        $process = Process::fromShellCommandline($command, base_path());
         $process->run();
 
         if (!$process->isSuccessful()) {
-            Log::error("ProcessComicAIJob failed: pdftotext error - " . $process->getErrorOutput());
-            return;
+            throw new \RuntimeException(
+                'Failed to spawn background AI processor: ' . trim($process->getErrorOutput())
+            );
         }
 
-        $text = $process->getOutput();
+        Log::info("ProcessComicAIJob: background AI processor started for comic {$comicId} (LLM runs in separate process, no queue timeout)");
+    }
 
-        if (empty(trim($text))) {
-            Log::warning("ProcessComicAIJob: Extracted text is empty for comic {$this->comic->id}.");
-            return;
-        }
-
-        // Generate metadata
-        $metadata = $aiService->generateMetadata($text, $this->userId);
-
-        if ($metadata) {
-            $this->comic->update([
-                'ai_summary' => $metadata['summary'] ?? null,
-                'rating' => $metadata['rating'] ?? null,
-                'tags' => isset($metadata['tags']) ? json_encode($metadata['tags']) : null,
-            ]);
-            Log::info("Successfully generated AI metadata for comic {$this->comic->id}");
-        } else {
-            Log::error("Failed to generate AI metadata for comic {$this->comic->id}");
-        }
+    public function failed(?\Throwable $exception): void
+    {
+        Log::error("ProcessComicAIJob failed for comic {$this->comic->id}: " . ($exception?->getMessage() ?? 'Unknown error'));
     }
 }

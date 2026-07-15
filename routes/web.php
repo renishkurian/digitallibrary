@@ -104,6 +104,7 @@ Route::middleware('auth')->group(function () {
         // Settings Management
         Route::get('/settings', [App\Http\Controllers\Admin\SettingController::class, 'index'])->name('settings.index');
         Route::post('/settings', [App\Http\Controllers\Admin\SettingController::class, 'update'])->name('settings.update');
+        Route::post('/settings/test', [App\Http\Controllers\Admin\SettingController::class, 'test'])->name('settings.test');
 
         // AI Logs
         Route::get('/ai-logs', [App\Http\Controllers\Admin\AiLogController::class, 'index'])->name('ai-logs.index');

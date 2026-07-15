@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
+use App\Services\AIService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -45,5 +46,33 @@ class SettingController extends Controller
         Setting::set('ai_model', $request->ai_model ?? '');
 
         return redirect()->back()->with('success', 'Settings updated successfully.');
+    }
+
+    public function test(Request $request, AIService $aiService)
+    {
+        $request->validate([
+            'ai_provider' => 'required|string',
+            'ai_base_url' => 'nullable|url',
+            'ai_api_key' => 'nullable|string',
+            'ai_model' => 'required|string',
+        ]);
+
+        $apiKey = (string) ($request->input('ai_api_key') ?? '');
+        if ($apiKey === '********' || $apiKey === '') {
+            $apiKey = (string) Setting::get('ai_api_key', '');
+        }
+
+        $result = $aiService->testConnection(
+            $request->ai_provider,
+            $apiKey,
+            $request->ai_model,
+            (string) ($request->ai_base_url ?? ''),
+        );
+
+        if (!$result['success']) {
+            return response()->json($result, 422);
+        }
+
+        return response()->json($result);
     }
 }

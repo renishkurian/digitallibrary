@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 
 use App\Models\Comic;
+use App\Models\Setting;
 use App\Models\Shelf;
 use App\Models\Category;
 use App\Models\User;
@@ -222,8 +223,22 @@ class ComicController extends Controller
             'comics' => $comics,
             'recentlyRead' => $recentlyRead,
             'filters' => $request->only([
-                'q', 'status', 'shelf', 'category', 'personal', 'shared', 'hidden', 'date_from', 'date_to',
-                'series', 'publisher', 'language', 'rating_min', 'rating_max', 'year_from', 'year_to',
+                'q',
+                'status',
+                'shelf',
+                'category',
+                'personal',
+                'shared',
+                'hidden',
+                'date_from',
+                'date_to',
+                'series',
+                'publisher',
+                'language',
+                'rating_min',
+                'rating_max',
+                'year_from',
+                'year_to',
             ]),
             'discoveryFacets' => $this->discoveryFacetOptions(),
             'shelves' => Shelf::visible(Auth::user())->whereNull('parent_id')->with(['children' => fn($q) => $q->visible(Auth::user())])->orderBy('name')->get()->map(fn($s) => [
@@ -349,7 +364,7 @@ class ComicController extends Controller
                 ->where('user_id', Auth::id())
                 ->orderBy('name')
                 ->get(['id', 'name'])
-                ->map(fn (ComicPlaylist $p) => ['id' => $p->id, 'name' => $p->name])
+                ->map(fn(ComicPlaylist $p) => ['id' => $p->id, 'name' => $p->name])
                 ->values()
                 ->all();
         }
@@ -365,7 +380,7 @@ class ComicController extends Controller
             'next_issue' => $next ? ['id' => $next->hash_id, 'title' => $next->title] : null,
             'prev_comic' => $prev ? ['id' => $prev->hash_id, 'title' => $prev->title] : null,
             'next_comic' => $next ? ['id' => $next->hash_id, 'title' => $next->title] : null,
-            'similar_comics' => $similar->map(fn (Comic $c) => [
+            'similar_comics' => $similar->map(fn(Comic $c) => [
                 'id' => $c->hash_id,
                 'title' => $c->title,
                 'thumbnail' => $c->thumbnail,
@@ -567,6 +582,7 @@ class ComicController extends Controller
             'shared_roles'  => $comic->sharedRoles->map(fn($r) => ['id' => $r->id, 'name' => $r->name]),
             'share_url'     => $comic->share_url,
             'rating'        => $comic->rating,
+            'ai_summary'    => $comic->ai_summary,
             'thumbnail'     => $comic->thumbnail,
             'tags'          => $comic->tags,
             'filename'      => $comic->filename,
@@ -597,6 +613,7 @@ class ComicController extends Controller
         return Inertia::render('Admin/Comics/Index', [
             'comics'     => $comics,
             'auto_edit_comic' => $autoEditComic,
+            'ai_enabled' => Setting::get('ai_enabled', '0') === '1',
             'shelves'    => Shelf::whereNull('parent_id')->with(['children' => fn($q) => $q->withCount('comics')])->withCount('comics')->orderBy('name')->get(),
             'categories' => Category::orderBy('name')->get(),
             'users'      => User::orderBy('name')->get(['id', 'name', 'email']),

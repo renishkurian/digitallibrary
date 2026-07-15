@@ -13,6 +13,26 @@ const isMobileReaderViewport = () => {
     return window.innerWidth < 768 || (coarse && window.innerWidth < 1200);
 };
 
+const getOutputPixelRatio = () => Math.min(window.devicePixelRatio || 1, 2.5);
+
+/** Render at display scale with crisp device-pixel output (no CSS upscaling). */
+const prepareCanvasRender = (canvas, page, displayScale) => {
+    const viewport = page.getViewport({ scale: displayScale });
+    const outputScale = getOutputPixelRatio();
+    const context = canvas.getContext('2d');
+
+    canvas.width = Math.floor(viewport.width * outputScale);
+    canvas.height = Math.floor(viewport.height * outputScale);
+    canvas.style.width = `${Math.floor(viewport.width)}px`;
+    canvas.style.height = `${Math.floor(viewport.height)}px`;
+
+    const transform = outputScale !== 1
+        ? [outputScale, 0, 0, outputScale, 0, 0]
+        : undefined;
+
+    return { context, viewport, transform };
+};
+
 export default function Show({ comic, last_read_page, personal_shelves, bookmarks: initialBookmarks, prev_comic, next_comic, magazine_name, display_date, similar_comics = [], read_lists = [] }) {
     const [pdfDoc, setPdfDoc] = useState(null);
     const [pageNum, setPageNum] = useState(last_read_page || 1);
@@ -152,8 +172,8 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
         const container = scrollRef.current;
         if (!container || !pdfDoc || container.clientWidth < 50) return null;
 
-        const padX = isMobile ? 8 : 48;
-        const padY = isMobile ? 8 : 48;
+        const padX = isMobile ? 16 : 64;
+        const padY = isMobile ? 16 : 64;
         const portrait = container.clientHeight > container.clientWidth;
         const clamp = (n) => Math.min(3.0, Math.max(0.5, n));
 
@@ -170,14 +190,16 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
                 if (rightNum > leftNum) {
                     const rightPage = await pdfDoc.getPage(rightNum);
                     const rv = rightPage.getViewport({ scale: 1.0 });
-                    spreadW = lv.width + rv.width;
+                    spreadW = lv.width + rv.width + 2;
                     spreadH = Math.max(lv.height, rv.height);
                 }
             }
 
-            const fitWidth = (container.clientWidth - padX) / spreadW;
-            const fitHeight = (container.clientHeight - padY) / spreadH;
-            return clamp(Math.min(fitWidth, fitHeight));
+            const availW = container.clientWidth - padX;
+            const availH = container.clientHeight - padY;
+            const fitWidth = availW / spreadW;
+            const fitHeight = availH / spreadH;
+            return clamp(Math.min(fitWidth, fitHeight) * 0.98);
         }
 
         const page = await pdfDoc.getPage(fitPageNum);
@@ -230,7 +252,6 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
         if (!pdfDoc) return;
 
         pdfDoc.getPage(num).then((page) => {
-            const viewport = page.getViewport({ scale: currentScale });
             const canvas = canvasRef.current;
             if (!canvas) {
                 if (retries < 30) {
@@ -241,20 +262,17 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
                 return;
             }
 
-            const context = canvas.getContext('2d');
-            canvas.height = viewport.height;
-            canvas.width = viewport.width;
-
             if (renderTaskRef.current) {
                 renderTaskRef.current.cancel();
             }
 
-            const renderContext = {
-                canvasContext: context,
-                viewport: viewport,
-            };
+            const { context, viewport: renderViewport, transform } = prepareCanvasRender(canvas, page, currentScale);
 
-            renderTaskRef.current = page.render(renderContext);
+            renderTaskRef.current = page.render({
+                canvasContext: context,
+                viewport: renderViewport,
+                transform,
+            });
             renderTaskRef.current.promise.then(() => {
                 renderTaskRef.current = null;
                 setLoading(false);
@@ -278,11 +296,8 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
                 return Promise.resolve();
             }
             return pdfDoc.getPage(pageNumber).then((page) => {
-                const viewport = page.getViewport({ scale: currentScale });
-                const context = canvasEl.getContext('2d');
-                canvasEl.height = viewport.height;
-                canvasEl.width = viewport.width;
-                return page.render({ canvasContext: context, viewport }).promise;
+                const { context, viewport, transform } = prepareCanvasRender(canvasEl, page, currentScale);
+                return page.render({ canvasContext: context, viewport, transform }).promise;
             });
         };
 
@@ -324,11 +339,8 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
             }
 
             pdfDoc.getPage(pgNum).then((page) => {
-                const viewport = page.getViewport({ scale: currentScale });
-                const context = canvas.getContext('2d');
-                canvas.height = viewport.height;
-                canvas.width = viewport.width;
-                const task = page.render({ canvasContext: context, viewport });
+                const { context, viewport, transform } = prepareCanvasRender(canvas, page, currentScale);
+                const task = page.render({ canvasContext: context, viewport, transform });
                 task.promise.then(() => renderNext(idx + 1)).catch(() => renderNext(idx + 1));
             });
         };
@@ -1302,7 +1314,7 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
 
                     {/* Single Page Mode */}
                     {effectiveViewMode === 'single' && (
-                        <canvas ref={canvasRef} className="block max-h-full max-w-full shadow-[0_8px_40px_rgba(0,0,0,0.7)] rounded-sm" />
+                        <canvas ref={canvasRef} className="block max-h-full max-w-full shadow-[0_8px_40px_rgba(0,0,0,0.7)] rounded-sm shrink-0" />
                     )}
 
                     {/* Scroll Mode - All pages stacked */}
@@ -1373,6 +1385,7 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
                             align-items: center;
                             justify-content: center;
                             width: 100%;
+                            height: 100%;
                             max-width: 100%;
                             max-height: 100%;
                             flex: 1;
@@ -1385,27 +1398,26 @@ export default function Show({ comic, last_read_page, personal_shelves, bookmark
                         }
                         .book-page {
                             position: relative;
-                            flex: 1 1 0;
+                            flex: 0 0 auto;
                             min-width: 0;
                             max-width: calc(50% - 1px);
                             max-height: 100%;
                             display: flex;
                             align-items: center;
                             justify-content: center;
-                            overflow: hidden;
+                            overflow: visible;
                             box-shadow: 0 4px 30px rgba(0,0,0,0.4);
                             background: #1a1a24;
                         }
                         .book-page-single {
-                            flex: 1 1 auto;
                             max-width: 100%;
                         }
                         .book-canvas {
                             display: block;
-                            width: 100%;
-                            height: auto;
+                            max-width: 100%;
                             max-height: 100%;
-                            object-fit: contain;
+                            width: auto;
+                            height: auto;
                         }
                         .book-page-left {
                             border-radius: 3px 0 0 3px;

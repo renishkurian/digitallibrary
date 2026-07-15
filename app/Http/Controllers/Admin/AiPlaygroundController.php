@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Comic;
 use App\Models\Setting;
 use App\Models\AiLog;
+use App\Services\AIService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -21,18 +22,18 @@ class AiPlaygroundController extends Controller
         ]);
     }
 
-    public function query(Request $request)
+    public function query(Request $request, AIService $aiService)
     {
         $request->validate(['prompt' => 'required|string']);
         $prompt = $request->prompt;
 
-        $provider = Setting::get('ai_provider', 'openai');
-        $apiKey = Setting::get('ai_api_key', '');
-        $model = Setting::get('ai_model', 'gpt-4o');
-        $baseUrl = Setting::get('ai_base_url', '');
+        $provider = (string) Setting::get('ai_provider', 'openai');
+        $apiKey = (string) Setting::get('ai_api_key', '');
+        $model = (string) Setting::get('ai_model', 'gpt-4o');
+        $baseUrl = (string) Setting::get('ai_base_url', '');
 
-        if (empty($apiKey)) {
-            return response()->json(['error' => 'AI API key is not configured.'], 400);
+        if (!$aiService->providerConfigured($provider, $apiKey, $baseUrl)) {
+            return response()->json(['error' => 'AI provider is not configured. Check Settings for provider, model, and API token.'], 400);
         }
 
         // Define Tools
@@ -82,11 +83,24 @@ class AiPlaygroundController extends Controller
         ];
 
         // Currently supporting function calling natively via OpenAI format (Works for many proxies too)
-        if ($provider !== 'openai' && $provider !== 'custom') {
-            return response()->json(['error' => 'The AI Playground with tools is currently only supported with OpenAI or OpenAI-compatible custom endpoints.'], 400);
+        if (!in_array($provider, ['openai', 'custom', 'ollama'], true)) {
+            return response()->json(['error' => 'The AI Playground with tools is currently only supported with OpenAI or OpenAI-compatible endpoints.'], 400);
         }
 
-        $url = $baseUrl ?: 'https://api.openai.com/v1';
+        $url = $aiService->resolveBaseUrl($provider, $baseUrl);
+        $isLocal = $aiService->usesLocalLlm($provider, $baseUrl);
+
+        if ($isLocal) {
+            Log::info('AI Playground: using local LLM (Ollama)', [
+                'provider' => $provider,
+                'model' => $model,
+                'base_url' => $url,
+            ]);
+        }
+        $http = Http::timeout($isLocal ? 180 : 60);
+        if ($apiKey !== '') {
+            $http = $http->withToken($apiKey);
+        }
         $messages = [
             ['role' => 'system', 'content' => 'You are an AI database assistant for a comic book library. Use the provided tools to fetch data and make updates when asked. Only summarize what you actually found via tools.'],
             ['role' => 'user', 'content' => $prompt],
@@ -94,16 +108,24 @@ class AiPlaygroundController extends Controller
 
         try {
             // First Call
-            $response = Http::withToken($apiKey)->timeout(60)->post(rtrim($url, '/') . '/chat/completions', [
+            $payload = [
                 'model' => $model,
                 'messages' => $messages,
-                'tools' => $tools,
-                'tool_choice' => 'auto'
-            ]);
+                'stream' => false,
+            ];
+
+            if (!$isLocal) {
+                $payload['tools'] = $tools;
+                $payload['tool_choice'] = 'auto';
+            }
+
+            $response = $http->post(rtrim($url, '/') . '/chat/completions', $payload);
 
             if (!$response->successful()) {
                 Log::error("Playground Error: " . $response->body());
-                return response()->json(['error' => 'Failed to connect to AI provider'], 500);
+                $error = $response->json('error.message') ?? $response->json('error') ?? 'Failed to connect to AI provider';
+
+                return response()->json(['error' => is_string($error) ? $error : 'Failed to connect to AI provider'], 500);
             }
 
             $responseData = $response->json();
@@ -146,9 +168,10 @@ class AiPlaygroundController extends Controller
                 }
 
                 // Second Call with tool results
-                $finalResponse = Http::withToken($apiKey)->timeout(60)->post(rtrim($url, '/') . '/chat/completions', [
+                $finalResponse = $http->post(rtrim($url, '/') . '/chat/completions', [
                     'model' => $model,
                     'messages' => $messages,
+                    'stream' => false,
                 ]);
 
                 if ($finalResponse->successful()) {

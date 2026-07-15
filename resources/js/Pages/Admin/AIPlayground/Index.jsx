@@ -41,7 +41,7 @@ export default function Index({ auth, provider, model }) {
             toast.error(error.response?.data?.error || 'Failed to communicate with AI');
             setMessages(prev => [...prev, {
                 role: 'assistant',
-                content: `Error: ${error.response?.data?.error || 'Failed to process request. Ensure you are using OpenAI and have an API key configured.'}`,
+                content: `Error: ${error.response?.data?.error || 'Failed to process request. Check AI Settings (provider, model, and connection).'}`,
                 isError: true
             }]);
         } finally {
@@ -66,7 +66,12 @@ export default function Index({ auth, provider, model }) {
                         <span className="px-3 py-1 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full text-[11px] font-bold tracking-wider uppercase">
                             Model: {model}
                         </span>
-                        {provider !== 'openai' && provider !== 'custom' && (
+                        {provider === 'ollama' && (
+                            <span className="px-3 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full text-[11px] font-bold tracking-wider uppercase">
+                                Local model: tool calling may be slow or unreliable
+                            </span>
+                        )}
+                        {!['openai', 'custom', 'ollama'].includes(provider) && (
                             <span className="px-3 py-1 bg-[#e8003d]/20 text-[#e8003d] border border-[#e8003d]/30 rounded-full text-[11px] font-bold tracking-wider uppercase">
                                 Warning: Tool calling may fail
                             </span>
